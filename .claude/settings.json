@@ -7,7 +7,9 @@
       "Bash(npx eslint:*)",
       "Bash(set -a)",
       "Bash(source:*)",
-      "Bash(set:*)"
+      "Bash(set:*)",
+      "Bash(docker build:*)",
+      "Bash(docker manifest inspect:*)"
     ]
   }
 }
