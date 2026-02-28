@@ -36,9 +36,16 @@ jobs:
       - name: Fetch font
         run: |
           mkdir -p app/src/assets/fonts
-          curl -f -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-            "${{ secrets.SUPABASE_URL }}/storage/v1/object/GB%20Assets/tx-02.woff2" \
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "Error: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY secret is not set"
+            exit 1
+          fi
+          curl -fsS -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+            "$SUPABASE_URL/storage/v1/object/GB%20Assets/tx-02.woff2" \
             -o app/src/assets/fonts/tx-02.woff2
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 
       - name: Lint
         run: pnpm lint
