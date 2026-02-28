@@ -1,0 +1,47 @@
+name: Client CI
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "client/**"
+
+jobs:
+  lint-and-build:
+    name: Lint & Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: client/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Fetch font
+        run: |
+          mkdir -p app/src/assets/fonts
+          curl -f -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            "${{ secrets.SUPABASE_URL }}/storage/v1/object/GB%20Assets/tx-02.woff2" \
+            -o app/src/assets/fonts/tx-02.woff2
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Build
+        run: pnpm build
