@@ -8,6 +8,7 @@
  *   - Transfer fails with insufficient funds
  *   - Bank deposit (mega-port, same corp)
  *   - Bank withdraw (mega-port)
+ *   - Warp transfer edge cases (Groups 7–11)
  *
  * Setup: 2 players in sector 0 (mega-port).
  */
@@ -339,6 +340,149 @@ Deno.test({
         (ship.credits as number) >= 1500,
         `Ship credits should have increased: ${ship.credits}`,
       );
+    });
+  },
+});
+
+// ============================================================================
+// Group 7: Warp transfer — self-transfer rejected
+// ============================================================================
+
+Deno.test({
+  name: "transfer — warp self-transfer rejected",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn(t) {
+    await t.step("reset", async () => {
+      await resetDatabase([P1]);
+      await apiOk("join", { character_id: p1Id });
+      await setShipWarpPower(p1ShipId, 400);
+    });
+
+    await t.step("self-transfer fails", async () => {
+      const result = await api("transfer_warp_power", {
+        from_character_id: p1Id,
+        to_player_name: P1,
+        units: 50,
+      });
+      assert(!result.ok || !result.body.success, "Expected self-transfer to fail");
+      // May return 400 ("Cannot transfer to self") or 404 (target not found)
+      assert(
+        result.status === 400 || result.status === 404,
+        `Expected 400 or 404 for self-transfer, got ${result.status}`,
+      );
+    });
+  },
+});
+
+// ============================================================================
+// Group 8: Warp transfer — insufficient warp power
+// ============================================================================
+
+Deno.test({
+  name: "transfer — warp insufficient power",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn(t) {
+    await t.step("reset and drain warp", async () => {
+      await resetDatabase([P1, P2]);
+      await apiOk("join", { character_id: p1Id });
+      await apiOk("join", { character_id: p2Id });
+      await setShipWarpPower(p1ShipId, 5);
+    });
+
+    await t.step("transfer more than available fails", async () => {
+      const result = await api("transfer_warp_power", {
+        from_character_id: p1Id,
+        to_player_name: P2,
+        units: 50,
+      });
+      assert(!result.ok || !result.body.success, "Expected insufficient warp to fail");
+      assertEquals(result.status, 400, "Expected 400");
+    });
+  },
+});
+
+// ============================================================================
+// Group 9: Warp transfer — different sectors
+// ============================================================================
+
+Deno.test({
+  name: "transfer — warp fails in different sectors",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn(t) {
+    await t.step("reset and move P2 away", async () => {
+      await resetDatabase([P1, P2]);
+      await apiOk("join", { character_id: p1Id });
+      await apiOk("join", { character_id: p2Id });
+      await setShipWarpPower(p1ShipId, 400);
+      await setShipSector(p2ShipId, 1);
+    });
+
+    await t.step("transfer fails with sector mismatch", async () => {
+      const result = await api("transfer_warp_power", {
+        from_character_id: p1Id,
+        to_player_name: P2,
+        units: 50,
+      });
+      assert(!result.ok || !result.body.success, "Expected different sectors to fail");
+    });
+  },
+});
+
+// ============================================================================
+// Group 10: Warp transfer — receiver in hyperspace
+// ============================================================================
+
+Deno.test({
+  name: "transfer — warp fails when receiver in hyperspace",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn(t) {
+    await t.step("reset and put P2 in hyperspace", async () => {
+      await resetDatabase([P1, P2]);
+      await apiOk("join", { character_id: p1Id });
+      await apiOk("join", { character_id: p2Id });
+      await setShipWarpPower(p1ShipId, 400);
+      // Put P2 in hyperspace
+      const { setShipHyperspace } = await import("./helpers.ts");
+      await setShipHyperspace(p2ShipId, true, 1);
+    });
+
+    await t.step("transfer fails when receiver in hyperspace", async () => {
+      const result = await api("transfer_warp_power", {
+        from_character_id: p1Id,
+        to_player_name: P2,
+        units: 50,
+      });
+      assert(!result.ok || !result.body.success, "Expected hyperspace transfer to fail");
+    });
+  },
+});
+
+// ============================================================================
+// Group 11: Warp transfer — no recipient identifier
+// ============================================================================
+
+Deno.test({
+  name: "transfer — warp fails without recipient identifier",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn(t) {
+    await t.step("reset", async () => {
+      await resetDatabase([P1]);
+      await apiOk("join", { character_id: p1Id });
+      await setShipWarpPower(p1ShipId, 400);
+    });
+
+    await t.step("transfer fails without recipient", async () => {
+      const result = await api("transfer_warp_power", {
+        from_character_id: p1Id,
+        units: 50,
+      });
+      assert(!result.ok || !result.body.success, "Expected missing recipient to fail");
+      assertEquals(result.status, 400, "Expected 400");
     });
   },
 });

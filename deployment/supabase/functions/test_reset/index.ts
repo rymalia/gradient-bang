@@ -129,6 +129,24 @@ const PINNED_SECTORS: Record<string, number> = {
   test_events_p2: 0,
   test_events_p3: 0,
   test_events_p4: 0,
+  // Garrison deep tests: sector 3 (non-fedspace, combat allowed)
+  test_garr_p1: 3,
+  test_garr_p2: 3,
+  test_garr_p3: 3,
+  // Visibility tests: P1 in 3 (garrison owner), P2/P3 in 4 (observers)
+  test_vis_p1: 3,
+  test_vis_p2: 4,
+  test_vis_p3: 4,
+  // Combat tick tests: P1/P2 in sector 3, P3 in sector 4
+  test_tick_p1: 3,
+  test_tick_p2: 3,
+  test_tick_p3: 4,
+  // Transfer warp tests: sector 0
+  test_warp_p1: 0,
+  test_warp_p2: 0,
+  // Task lifecycle tests: sector 0
+  test_task_p1: 0,
+  test_task_p2: 0,
 };
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
@@ -401,7 +419,11 @@ async function seedUniverse(
     sector_count: sectorCount,
     generation_seed: meta["seed"] ?? null,
     generation_params: meta,
-    meta: { source: "supabase-test-reset" },
+    meta: {
+      source: "supabase-test-reset",
+      fedspace_sectors: meta["fedspace_sectors"] ?? [],
+      mega_port_sectors: meta["mega_port_sectors"] ?? [],
+    },
   });
   if (!configResp.ok) {
     throw new Error(

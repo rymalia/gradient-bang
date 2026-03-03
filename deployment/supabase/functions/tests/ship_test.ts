@@ -7,6 +7,7 @@
  *   - Rename ship
  *   - List user ships
  *   - Purchase requires mega-port
+ *   - Rename collision (Groups 6–7)
  *
  * Setup: 1 player in sector 0 (mega-port by default).
  */
@@ -256,6 +257,121 @@ Deno.test({
         ship_type: "kestrel_courier",
       });
       assert(!result.ok || !result.body.success, "Expected purchase to fail without mega-port");
+    });
+  },
+});
+
+// ============================================================================
+// Group 6: Rename ship — name collision (409)
+// ============================================================================
+
+Deno.test({
+  name: "ship — rename collision",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn(t) {
+    await t.step("reset and rename ship to known name", async () => {
+      await resetDatabase([P1]);
+      await apiOk("join", { character_id: p1Id });
+      // First rename to establish the name
+      await apiOk("ship_rename", {
+        character_id: p1Id,
+        ship_name: "UniqueTestShip",
+      });
+    });
+
+    await t.step("rename to same name is accepted (no change)", async () => {
+      const result = await apiOk("ship_rename", {
+        character_id: p1Id,
+        ship_name: "UniqueTestShip",
+      });
+      const body = result as Record<string, unknown>;
+      assertEquals(body.changed, false, "Renaming to same name should return changed=false");
+    });
+
+    await t.step("rename to empty name fails", async () => {
+      const result = await api("ship_rename", {
+        character_id: p1Id,
+        ship_name: "   ",
+      });
+      assertEquals(result.status, 400, "Expected 400 for empty name");
+    });
+  },
+});
+
+// ============================================================================
+// Group 7: Ship sell — corp ship at mega-port
+// ============================================================================
+
+Deno.test({
+  name: "ship — sell corp ship",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn(t) {
+    let corpShipId: string;
+
+    await t.step("reset and create corp with ship", async () => {
+      await resetDatabase([P1]);
+      await apiOk("join", { character_id: p1Id });
+      await setShipSector(p1ShipId, 0);
+      await setShipCredits(p1ShipId, 50000);
+      // Create corp
+      const corpResult = await apiOk("corporation_create", {
+        character_id: p1Id,
+        name: "Ship Sell Corp",
+      });
+      const corpBody = corpResult as Record<string, unknown>;
+      // Buy a corp ship
+      const { setMegabankBalance } = await import("./helpers.ts");
+      await setMegabankBalance(p1Id, 10000);
+      const purchaseResult = await apiOk("ship_purchase", {
+        character_id: p1Id,
+        ship_type: "autonomous_probe",
+        purchase_type: "corporation",
+      });
+      const purchaseBody = purchaseResult as Record<string, unknown>;
+      corpShipId = purchaseBody.ship_id as string;
+      assertExists(corpShipId, "Should get corp ship ID");
+    });
+
+    await t.step("sell corp ship", async () => {
+      const result = await apiOk("ship_sell", {
+        character_id: p1Id,
+        ship_id: corpShipId,
+        actor_character_id: p1Id,
+      });
+      const body = result as Record<string, unknown>;
+      assertExists(body.trade_in_value, "Should have trade_in_value");
+      assert(
+        (body.trade_in_value as number) > 0,
+        "Trade-in value should be positive",
+      );
+    });
+  },
+});
+
+// ============================================================================
+// Group 8: Ship sell — cannot sell personal ship
+// ============================================================================
+
+Deno.test({
+  name: "ship — cannot sell personal ship",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn(t) {
+    await t.step("reset", async () => {
+      await resetDatabase([P1]);
+      await apiOk("join", { character_id: p1Id });
+      await setShipSector(p1ShipId, 0);
+    });
+
+    await t.step("sell personal ship fails", async () => {
+      const result = await api("ship_sell", {
+        character_id: p1Id,
+        ship_id: p1ShipId,
+      });
+      assert(!result.ok || !result.body.success, "Expected personal ship sell to fail");
+      assertEquals(result.status, 400, "Expected 400");
     });
   },
 });

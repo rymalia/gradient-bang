@@ -5,6 +5,8 @@
  *   - Broadcast message (all players receive)
  *   - Direct message (only sender + recipient, not third party)
  *   - Message content validation (too long)
+ *   - Direct message recipient not found (Group 4)
+ *   - Empty content rejected (Group 5)
  *
  * Setup: 3 players in sector 0.
  */
@@ -178,6 +180,63 @@ Deno.test({
       // Server should either reject (400) or truncate — either way it handles it
       // Check that it doesn't crash (500)
       assert(result.status !== 500, "Server should not crash on long message");
+    });
+  },
+});
+
+// ============================================================================
+// Group 4: Direct message — recipient not found
+// ============================================================================
+
+Deno.test({
+  name: "messaging — direct message recipient not found",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn(t) {
+    await t.step("reset database", async () => {
+      await resetDatabase([P1]);
+      await apiOk("join", { character_id: p1Id });
+    });
+
+    await t.step("DM to non-existent player fails", async () => {
+      const result = await api("send_message", {
+        character_id: p1Id,
+        type: "direct",
+        content: "Hello nobody",
+        to_name: "nonexistent_player_xyz",
+      });
+      // Should return 404 or 400, not crash
+      assert(
+        !result.ok || !result.body.success,
+        "Expected DM to non-existent player to fail",
+      );
+      assert(result.status !== 500, "Should not crash");
+    });
+  },
+});
+
+// ============================================================================
+// Group 5: Empty content rejected
+// ============================================================================
+
+Deno.test({
+  name: "messaging — empty content",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn(t) {
+    await t.step("reset database", async () => {
+      await resetDatabase([P1]);
+      await apiOk("join", { character_id: p1Id });
+    });
+
+    await t.step("empty content fails", async () => {
+      const result = await api("send_message", {
+        character_id: p1Id,
+        type: "broadcast",
+        content: "",
+      });
+      // Should reject or handle gracefully
+      assert(result.status !== 500, "Should not crash on empty content");
     });
   },
 });

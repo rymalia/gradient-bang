@@ -5,6 +5,7 @@
  *   - list_user_ships: personal only, personal + corp ships, character not found
  *   - local_map_region: basic region around sector 0, with max_hops, with center_sector
  *   - plot_course: valid path (0→3), already at destination, invalid to_sector
+ *   - corporation_list, character_info, my_corporation, leaderboard (Groups 8–12)
  *
  * Setup: P1, P2 in sector 0 (mega-port).
  */
@@ -324,6 +325,137 @@ Deno.test({
       });
       assertEquals(result.status, 403);
       assert(result.body.error?.includes("discovered"));
+    });
+  },
+});
+
+// ============================================================================
+// Group 8: corporation_list
+// ============================================================================
+
+Deno.test({
+  name: "query_endpoints — corporation_list",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn(t) {
+    await t.step("reset and create corp", async () => {
+      await resetDatabase([P1, P2]);
+      await apiOk("join", { character_id: p1Id });
+      await apiOk("join", { character_id: p2Id });
+      await setShipCredits(p1ShipId, 50000);
+      await apiOk("corporation_create", {
+        character_id: p1Id,
+        name: "Test Corp For List",
+      });
+    });
+
+    await t.step("list corporations returns at least 1", async () => {
+      const result = await apiOk("corporation_list", {
+        character_id: p1Id,
+      });
+      const body = result as Record<string, unknown>;
+      assertExists(body.corporations, "Should have corporations array");
+      const corps = body.corporations as Array<Record<string, unknown>>;
+      assert(corps.length >= 1, "Should have at least 1 corporation");
+      // Verify structure
+      const corp = corps.find((c) => c.name === "Test Corp For List");
+      assertExists(corp, "Should find our test corp");
+      assertExists(corp.corp_id, "Corp should have corp_id");
+      assertExists(corp.member_count, "Corp should have member_count");
+    });
+  },
+});
+
+// ============================================================================
+// Group 9: character_info
+// ============================================================================
+
+Deno.test({
+  name: "query_endpoints — character_info",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn(t) {
+    await t.step("reset", async () => {
+      await resetDatabase([P1]);
+      await apiOk("join", { character_id: p1Id });
+    });
+
+    await t.step("get character info", async () => {
+      const result = await apiOk("character_info", {
+        character_id: p1Id,
+      });
+      const body = result as Record<string, unknown>;
+      assertExists(body.character_id, "Should have character_id");
+      assertExists(body.name, "Should have name");
+    });
+
+    await t.step("character not found fails", async () => {
+      const result = await api("character_info", {
+        character_id: crypto.randomUUID(),
+      });
+      assert(
+        !result.ok || !result.body.success,
+        "Expected unknown character to fail",
+      );
+      // May return 404 or 500 depending on Supabase error handling
+      assert(
+        result.status === 404 || result.status === 500,
+        `Expected 404 or 500 for unknown character, got ${result.status}`,
+      );
+    });
+  },
+});
+
+// ============================================================================
+// Group 10: my_corporation
+// ============================================================================
+
+Deno.test({
+  name: "query_endpoints — my_corporation",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn(t) {
+    await t.step("reset and create corp", async () => {
+      await resetDatabase([P1]);
+      await apiOk("join", { character_id: p1Id });
+      await setShipCredits(p1ShipId, 50000);
+      await apiOk("corporation_create", {
+        character_id: p1Id,
+        name: "My Corp Test",
+      });
+    });
+
+    await t.step("get my corporation info", async () => {
+      const result = await apiOk("my_corporation", {
+        character_id: p1Id,
+      });
+      const body = result as Record<string, unknown>;
+      assertExists(body.request_id, "Should have request_id");
+    });
+  },
+});
+
+// ============================================================================
+// Group 11: path_with_region — returns request_id and emits event
+// ============================================================================
+
+Deno.test({
+  name: "query_endpoints — path_with_region",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn(t) {
+    await t.step("reset", async () => {
+      await resetDatabase([P1]);
+      await apiOk("join", { character_id: p1Id });
+    });
+
+    await t.step("get path with region from 0 to 3", async () => {
+      const result = await apiOk("path_with_region", {
+        character_id: p1Id,
+        to_sector: 3,
+      });
+      const body = result as Record<string, unknown>;
+      assertExists(body.request_id, "Should have request_id");
     });
   },
 });

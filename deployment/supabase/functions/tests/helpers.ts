@@ -315,6 +315,19 @@ export async function setShipFighters(
   });
 }
 
+/** Set a ship's shield count directly in the database. */
+export async function setShipShields(
+  shipId: string,
+  shields: number,
+): Promise<void> {
+  await withPg(async (pg) => {
+    await pg.queryObject(
+      `UPDATE ship_instances SET current_shields = $1 WHERE ship_id = $2`,
+      [shields, shipId],
+    );
+  });
+}
+
 /** Set a ship's hyperspace state directly in the database. */
 export async function setShipHyperspace(
   shipId: string,
@@ -521,5 +534,54 @@ export async function queryGarrison(
       [sectorId],
     );
     return result.rows[0] ?? null;
+  });
+}
+
+/** Insert a garrison row directly into the database for testing. */
+export async function insertGarrisonDirect(
+  sectorId: number,
+  ownerId: string,
+  fighters: number,
+  mode: string = "offensive",
+  tollAmount: number = 0,
+  tollBalance: number = 0,
+): Promise<void> {
+  await withPg(async (pg) => {
+    await pg.queryObject(
+      `INSERT INTO garrisons (sector_id, owner_id, fighters, mode, toll_amount, toll_balance, deployed_at)
+       VALUES ($1, $2, $3, $4, $5, $6, NOW())
+       ON CONFLICT (sector_id) DO UPDATE SET
+         owner_id = $2, fighters = $3, mode = $4, toll_amount = $5, toll_balance = $6`,
+      [sectorId, ownerId, fighters, mode, tollAmount, tollBalance],
+    );
+  });
+}
+
+/** Set a garrison's toll_balance directly in the database. */
+export async function setGarrisonTollBalance(
+  sectorId: number,
+  balance: number,
+): Promise<void> {
+  await withPg(async (pg) => {
+    await pg.queryObject(
+      `UPDATE garrisons SET toll_balance = $1 WHERE sector_id = $2`,
+      [balance, sectorId],
+    );
+  });
+}
+
+/** Configure fedspace_sectors in universe_config meta for testing. */
+export async function setFedspaceSectors(
+  sectors: number[],
+): Promise<void> {
+  await withPg(async (pg) => {
+    await pg.queryObject(
+      `UPDATE universe_config SET meta = jsonb_set(
+        COALESCE(meta, '{}'::jsonb),
+        '{fedspace_sectors}',
+        $1::jsonb
+      ) WHERE id = 1`,
+      [JSON.stringify(sectors)],
+    );
   });
 }
