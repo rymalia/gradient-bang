@@ -29,6 +29,9 @@ import {
   setMegabankBalance,
   createCorpShip,
   withPg,
+  eventsOfType,
+  getEventCursor,
+  apiRaw,
 } from "./helpers.ts";
 
 const P1 = "test_query_p1";
@@ -1163,6 +1166,639 @@ Deno.test({
       });
       const body = result as Record<string, unknown>;
       assertExists(body.request_id);
+    });
+  },
+});
+
+// ============================================================================
+// Group 35: list_known_ports — trade_type sell + mega false
+// ============================================================================
+
+Deno.test({
+  name: "query_endpoints — list_known_ports trade_type sell + mega false",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn(t) {
+    await t.step("reset, visit sector 1", async () => {
+      await resetDatabase([P1]);
+      await apiOk("join", { character_id: p1Id });
+      // Move to sector 1 to mark it as visited (sector 1 has port BBS)
+      await apiOk("move", { character_id: p1Id, to_sector: 1 });
+      // Move back to sector 0
+      await apiOk("move", { character_id: p1Id, to_sector: 0 });
+    });
+
+    let cursorSell: number;
+    await t.step("capture cursor", async () => {
+      cursorSell = await getEventCursor(p1Id);
+    });
+
+    await t.step("trade_type=sell finds ports buying quantum_foam", async () => {
+      // trade_type "sell" → player wants to sell → port must BUY → code char = "B"
+      // Sector 1 (BBS): position 0 = "B" → matches sell filter for quantum_foam
+      const result = await apiOk("list_known_ports", {
+        character_id: p1Id,
+        commodity: "quantum_foam",
+        trade_type: "sell",
+        max_hops: 1,
+      });
+      assertExists((result as Record<string, unknown>).request_id);
+    });
+
+    await t.step("verify sell filter in event", async () => {
+      const events = await eventsOfType(p1Id, "ports.list", cursorSell);
+      assert(events.length >= 1, "Should have ports.list event");
+      const payload = events[events.length - 1].payload as Record<string, unknown>;
+      assertEquals(payload.trade_type, "sell");
+      assertEquals(payload.commodity, "quantum_foam");
+      const totalPorts = payload.total_ports_found as number;
+      assert(totalPorts >= 1, `Expected >= 1 port for sell filter, got ${totalPorts}`);
+    });
+
+    let cursorMega: number;
+    await t.step("capture cursor for mega test", async () => {
+      cursorMega = await getEventCursor(p1Id);
+    });
+
+    await t.step("mega=false includes non-mega ports", async () => {
+      const result = await apiOk("list_known_ports", {
+        character_id: p1Id,
+        mega: false,
+        max_hops: 1,
+      });
+      assertExists((result as Record<string, unknown>).request_id);
+    });
+
+    await t.step("verify mega=false event", async () => {
+      const events = await eventsOfType(p1Id, "ports.list", cursorMega);
+      assert(events.length >= 1, "Should have ports.list event");
+      const payload = events[events.length - 1].payload as Record<string, unknown>;
+      assertEquals(payload.mega, false);
+      const totalPorts = payload.total_ports_found as number;
+      assert(totalPorts >= 1, `Expected >= 1 non-mega port, got ${totalPorts}`);
+    });
+  },
+});
+
+// ============================================================================
+// Group 36: list_known_ports — multi-hop BFS + inSector + default from_sector
+// ============================================================================
+
+Deno.test({
+  name: "query_endpoints — list_known_ports multi-hop BFS + inSector",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn(t) {
+    await t.step("reset, move to sector 3 via sector 1", async () => {
+      await resetDatabase([P1]);
+      await apiOk("join", { character_id: p1Id });
+      await apiOk("move", { character_id: p1Id, to_sector: 1 });
+      await apiOk("move", { character_id: p1Id, to_sector: 3 });
+      // Ship is now at sector 3; sectors 0, 1, 3 are visited
+    });
+
+    let cursor: number;
+    await t.step("capture cursor", async () => {
+      cursor = await getEventCursor(p1Id);
+    });
+
+    await t.step("list ports without from_sector (defaults to ship sector)", async () => {
+      const result = await apiOk("list_known_ports", {
+        character_id: p1Id,
+        max_hops: 2,
+      });
+      assertExists((result as Record<string, unknown>).request_id);
+    });
+
+    await t.step("verify BFS results and inSector", async () => {
+      const events = await eventsOfType(p1Id, "ports.list", cursor);
+      assert(events.length >= 1, "Should have ports.list event");
+      const payload = events[events.length - 1].payload as Record<string, unknown>;
+
+      // from_sector defaults to ship.current_sector = 3
+      assertEquals(payload.from_sector, 3, "from_sector should default to ship sector");
+
+      const ports = payload.ports as Array<Record<string, unknown>>;
+      assert(ports.length >= 2, `Expected >= 2 ports, got ${ports.length}`);
+
+      // Sector 3 at hop 0 (ship is here, port BSS)
+      const s3 = ports.find(
+        (p) => ((p.sector as Record<string, unknown>)?.id as number) === 3,
+      );
+      assertExists(s3, "Should find sector 3 port at hop 0");
+      assertEquals(s3!.hops_from_start, 0);
+
+      // inSector port should have observed_at = null
+      const s3Port = (s3!.sector as Record<string, unknown>)
+        ?.port as Record<string, unknown>;
+      assertEquals(
+        s3Port?.observed_at,
+        null,
+        "inSector port should have observed_at=null",
+      );
+
+      // Sector 1 at hop 1 (port BBS, visited, ship NOT here)
+      const s1 = ports.find(
+        (p) => ((p.sector as Record<string, unknown>)?.id as number) === 1,
+      );
+      assertExists(s1, "Should find sector 1 port at hop 1");
+      assertEquals(s1!.hops_from_start, 1);
+
+      // Verify sorted ascending by hops
+      const hops = ports.map((p) => p.hops_from_start as number);
+      for (let i = 1; i < hops.length; i++) {
+        assert(hops[i] >= hops[i - 1], "Ports should be sorted by hops");
+      }
+    });
+  },
+});
+
+// ============================================================================
+// Group 37: list_known_ports — max_hops=0 single sector with port
+// ============================================================================
+
+Deno.test({
+  name: "query_endpoints — list_known_ports max_hops 0 single sector",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn(t) {
+    await t.step("reset, move to sector 1", async () => {
+      await resetDatabase([P1]);
+      await apiOk("join", { character_id: p1Id });
+      await apiOk("move", { character_id: p1Id, to_sector: 1 });
+    });
+
+    let cursor: number;
+    await t.step("capture cursor", async () => {
+      cursor = await getEventCursor(p1Id);
+    });
+
+    await t.step("max_hops=0 returns only start sector port", async () => {
+      const result = await apiOk("list_known_ports", {
+        character_id: p1Id,
+        from_sector: 1,
+        max_hops: 0,
+      });
+      assertExists((result as Record<string, unknown>).request_id);
+    });
+
+    await t.step("verify single sector searched", async () => {
+      const events = await eventsOfType(p1Id, "ports.list", cursor);
+      assert(events.length >= 1);
+      const payload = events[events.length - 1].payload as Record<string, unknown>;
+      assertEquals(payload.searched_sectors, 1, "max_hops=0 should search only 1 sector");
+      assertEquals(payload.total_ports_found, 1, "Sector 1 has a port");
+      assertEquals(payload.from_sector, 1);
+
+      // Verify port data has prices
+      const ports = payload.ports as Array<Record<string, unknown>>;
+      assertEquals(ports.length, 1);
+      const portData = (ports[0].sector as Record<string, unknown>)
+        ?.port as Record<string, unknown>;
+      assertExists(portData?.code, "Port should have code");
+      assertExists(portData?.prices, "Port should have prices");
+    });
+  },
+});
+
+// ============================================================================
+// Group 38: list_known_ports — mega=true default max_hops
+// ============================================================================
+
+Deno.test({
+  name: "query_endpoints — list_known_ports mega true default max_hops",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn(t) {
+    await t.step("reset", async () => {
+      await resetDatabase([P1]);
+      await apiOk("join", { character_id: p1Id });
+    });
+
+    let cursor: number;
+    await t.step("capture cursor", async () => {
+      cursor = await getEventCursor(p1Id);
+    });
+
+    await t.step("mega=true without explicit max_hops", async () => {
+      const result = await apiOk("list_known_ports", {
+        character_id: p1Id,
+        mega: true,
+      });
+      assertExists((result as Record<string, unknown>).request_id);
+    });
+
+    await t.step("verify max_hops defaults to 100", async () => {
+      const events = await eventsOfType(p1Id, "ports.list", cursor);
+      assert(events.length >= 1);
+      const payload = events[events.length - 1].payload as Record<string, unknown>;
+      assertEquals(payload.max_hops, 100, "mega=true should default max_hops to 100");
+      assertEquals(payload.mega, true);
+    });
+  },
+});
+
+// ============================================================================
+// Group 39: list_known_ports — sort by hops then sector_id
+// ============================================================================
+
+Deno.test({
+  name: "query_endpoints — list_known_ports sort order",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn(t) {
+    await t.step("reset, visit sectors 1 and 2", async () => {
+      await resetDatabase([P1]);
+      await apiOk("join", { character_id: p1Id });
+      await apiOk("move", { character_id: p1Id, to_sector: 1 });
+      await apiOk("move", { character_id: p1Id, to_sector: 0 });
+      await apiOk("move", { character_id: p1Id, to_sector: 2 });
+      await apiOk("move", { character_id: p1Id, to_sector: 0 });
+      // Sectors 0, 1, 2 visited. Ship at sector 0.
+    });
+
+    let cursor: number;
+    await t.step("capture cursor", async () => {
+      cursor = await getEventCursor(p1Id);
+    });
+
+    await t.step("list ports from sector 0 max_hops=1", async () => {
+      const result = await apiOk("list_known_ports", {
+        character_id: p1Id,
+        from_sector: 0,
+        max_hops: 1,
+      });
+      assertExists((result as Record<string, unknown>).request_id);
+    });
+
+    await t.step("verify sort: sector 1 before sector 2 (same hops)", async () => {
+      const events = await eventsOfType(p1Id, "ports.list", cursor);
+      assert(events.length >= 1);
+      const payload = events[events.length - 1].payload as Record<string, unknown>;
+      const ports = payload.ports as Array<Record<string, unknown>>;
+      assert(ports.length >= 2, `Expected >= 2 ports, got ${ports.length}`);
+
+      // Both sector 1 and 2 are at hop 1, should be sorted by sector_id
+      for (let i = 1; i < ports.length; i++) {
+        const prev = ports[i - 1];
+        const curr = ports[i];
+        const prevHops = prev.hops_from_start as number;
+        const currHops = curr.hops_from_start as number;
+        const prevId = (prev.sector as Record<string, unknown>)?.id as number;
+        const currId = (curr.sector as Record<string, unknown>)?.id as number;
+        if (prevHops === currHops) {
+          assert(prevId <= currId, `Expected sector ${prevId} <= ${currId} at same hops`);
+        } else {
+          assert(prevHops < currHops, "Expected ascending hop order");
+        }
+      }
+    });
+  },
+});
+
+// ============================================================================
+// Group 40: list_known_ports — actor mismatch
+// ============================================================================
+
+Deno.test({
+  name: "query_endpoints — list_known_ports actor mismatch",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn(t) {
+    await t.step("reset", async () => {
+      await resetDatabase([P1, P2]);
+      await apiOk("join", { character_id: p1Id });
+      await apiOk("join", { character_id: p2Id });
+    });
+
+    await t.step("P2 as actor for P1's ship → 403", async () => {
+      const result = await api("list_known_ports", {
+        character_id: p1Id,
+        actor_character_id: p2Id,
+      });
+      assertEquals(result.status, 403);
+    });
+  },
+});
+
+// ============================================================================
+// Group 41: list_known_ports — healthcheck
+// ============================================================================
+
+Deno.test({
+  name: "query_endpoints — list_known_ports healthcheck",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn(t) {
+    await t.step("healthcheck returns ok", async () => {
+      const result = await apiOk("list_known_ports", { healthcheck: true });
+      assertEquals((result as Record<string, unknown>).status, "ok");
+    });
+  },
+});
+
+// ============================================================================
+// Group 42: list_known_ports — malformed JSON
+// ============================================================================
+
+Deno.test({
+  name: "query_endpoints — list_known_ports malformed JSON",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn(t) {
+    await t.step("non-JSON body → 400", async () => {
+      const result = await apiRaw("list_known_ports", "not-json");
+      assertEquals(result.status, 400);
+    });
+
+    await t.step("non-object JSON body → 400", async () => {
+      const result = await apiRaw("list_known_ports", '"hello"');
+      assertEquals(result.status, 400);
+    });
+  },
+});
+
+// ============================================================================
+// Group 43: list_known_ports — port with stock at max capacity
+// ============================================================================
+
+Deno.test({
+  name: "query_endpoints — list_known_ports stock at max capacity",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn(t) {
+    await t.step("reset, visit sector 1 and saturate port stock", async () => {
+      await resetDatabase([P1]);
+      await apiOk("join", { character_id: p1Id });
+      await apiOk("move", { character_id: p1Id, to_sector: 1 });
+      // Set stock = max for all commodities on sector 1's port
+      await withPg(async (pg) => {
+        const portResult = await pg.queryObject<{ port_id: number }>(
+          `SELECT port_id FROM sector_contents WHERE sector_id = 1 AND port_id IS NOT NULL`,
+        );
+        if (portResult.rows.length > 0) {
+          const portId = portResult.rows[0].port_id;
+          await pg.queryObject(
+            `UPDATE ports SET stock_qf = max_qf, stock_ro = max_ro, stock_ns = max_ns WHERE port_id = $1`,
+            [portId],
+          );
+        }
+      });
+    });
+
+    let cursor: number;
+    await t.step("capture cursor", async () => {
+      cursor = await getEventCursor(p1Id);
+    });
+
+    await t.step("list ports from sector 1 max_hops=0", async () => {
+      const result = await apiOk("list_known_ports", {
+        character_id: p1Id,
+        from_sector: 1,
+        max_hops: 0,
+      });
+      assertExists((result as Record<string, unknown>).request_id);
+    });
+
+    await t.step("verify buy prices null when stock at max", async () => {
+      const events = await eventsOfType(p1Id, "ports.list", cursor);
+      assert(events.length >= 1);
+      const payload = events[events.length - 1].payload as Record<string, unknown>;
+      const ports = payload.ports as Array<Record<string, unknown>>;
+      assertEquals(ports.length, 1);
+
+      // Sector 1 has BBS: Buys QF+RO (B,B), Sells NS (S)
+      // With stock at max, buy prices should be null (port won't buy when full)
+      const portData = (ports[0].sector as Record<string, unknown>)
+        ?.port as Record<string, unknown>;
+      const prices = portData?.prices as Record<string, unknown>;
+      assertEquals(
+        prices?.quantum_foam,
+        null,
+        "QF buy price should be null when stock=max",
+      );
+      assertEquals(
+        prices?.retro_organics,
+        null,
+        "RO buy price should be null when stock=max",
+      );
+      // NS is sold by port, sell price should still exist
+      assert(prices?.neuro_symbolics !== null, "NS sell price should exist");
+    });
+  },
+});
+
+// ============================================================================
+// Group 44: list_known_ports — lowercase port code decoding
+// ============================================================================
+
+Deno.test({
+  name: "query_endpoints — list_known_ports lowercase port code",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn(t) {
+    await t.step("reset, visit sector 1, change port code to lowercase", async () => {
+      await resetDatabase([P1]);
+      await apiOk("join", { character_id: p1Id });
+      await apiOk("move", { character_id: p1Id, to_sector: 1 });
+      // Update sector 1's port code from "BBS" to "bbs"
+      await withPg(async (pg) => {
+        const portResult = await pg.queryObject<{ port_id: number }>(
+          `SELECT port_id FROM sector_contents WHERE sector_id = 1 AND port_id IS NOT NULL`,
+        );
+        if (portResult.rows.length > 0) {
+          const portId = portResult.rows[0].port_id;
+          await pg.queryObject(
+            `UPDATE ports SET port_code = 'bbs' WHERE port_id = $1`,
+            [portId],
+          );
+        }
+      });
+    });
+
+    let cursor: number;
+    await t.step("capture cursor", async () => {
+      cursor = await getEventCursor(p1Id);
+    });
+
+    await t.step("list ports with lowercase code from sector 1", async () => {
+      const result = await apiOk("list_known_ports", {
+        character_id: p1Id,
+        from_sector: 1,
+        max_hops: 0,
+      });
+      assertExists((result as Record<string, unknown>).request_id);
+    });
+
+    await t.step("verify port found with prices (lowercase code decoded)", async () => {
+      const events = await eventsOfType(p1Id, "ports.list", cursor);
+      assert(events.length >= 1);
+      const payload = events[events.length - 1].payload as Record<string, unknown>;
+      const ports = payload.ports as Array<Record<string, unknown>>;
+      assertEquals(ports.length, 1, "Should find 1 port at sector 1");
+
+      // Verify prices exist (lowercase 'bbs' should decode same as 'BBS')
+      const portData = (ports[0].sector as Record<string, unknown>)
+        ?.port as Record<string, unknown>;
+      const prices = portData?.prices as Record<string, unknown>;
+      assertExists(prices, "Should have prices");
+      // 'bbs' = buys QF+RO, sells NS → NS should have sell price
+      assert(prices?.neuro_symbolics !== null, "NS sell price should exist");
+    });
+  },
+});
+
+// ============================================================================
+// Group 45: list_known_ports — fromSector fallback when ship sector null
+// ============================================================================
+
+Deno.test({
+  name: "query_endpoints — list_known_ports fromSector fallback",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn(t) {
+    await t.step("reset, set ship current_sector to NULL", async () => {
+      await resetDatabase([P1]);
+      await apiOk("join", { character_id: p1Id });
+      // Set ship's current_sector to NULL to test fallback path
+      await withPg(async (pg) => {
+        await pg.queryObject(
+          `UPDATE ship_instances SET current_sector = NULL WHERE ship_id = $1`,
+          [p1ShipId],
+        );
+      });
+    });
+
+    let cursor: number;
+    await t.step("capture cursor", async () => {
+      cursor = await getEventCursor(p1Id);
+    });
+
+    await t.step("list ports without from_sector (falls back to knowledge or 0)", async () => {
+      const result = await apiOk("list_known_ports", {
+        character_id: p1Id,
+      });
+      assertExists((result as Record<string, unknown>).request_id);
+    });
+
+    await t.step("verify from_sector in event (should be 0)", async () => {
+      const events = await eventsOfType(p1Id, "ports.list", cursor);
+      assert(events.length >= 1);
+      const payload = events[events.length - 1].payload as Record<string, unknown>;
+      // Should fall back to knowledge.current_sector or default to 0
+      assertEquals(payload.from_sector, 0, "Should fall back to sector 0");
+    });
+  },
+});
+
+// ============================================================================
+// Group 46: list_known_ports — nonexistent character (rate limit FK error)
+// ============================================================================
+
+Deno.test({
+  name: "query_endpoints — list_known_ports nonexistent character",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn(t) {
+    await t.step("nonexistent character → 500", async () => {
+      // The rate_limits table has a FK to characters — a random UUID not in
+      // characters causes enforceRateLimit to throw a non-RateLimitError,
+      // exercising the generic rate limit error handler (lines 208-209).
+      const result = await api("list_known_ports", {
+        character_id: crypto.randomUUID(),
+      });
+      assertEquals(result.status, 500);
+    });
+  },
+});
+
+// ============================================================================
+// Group 47: list_known_ports — trade_type sell with retro_organics
+// ============================================================================
+
+Deno.test({
+  name: "query_endpoints — list_known_ports sell retro_organics",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn(t) {
+    await t.step("reset, visit sector 2", async () => {
+      await resetDatabase([P1]);
+      await apiOk("join", { character_id: p1Id });
+      // Sector 2 has SBB: Sells QF, Buys RO+NS
+      await apiOk("move", { character_id: p1Id, to_sector: 2 });
+      await apiOk("move", { character_id: p1Id, to_sector: 0 });
+    });
+
+    let cursor: number;
+    await t.step("capture cursor", async () => {
+      cursor = await getEventCursor(p1Id);
+    });
+
+    await t.step("sell retro_organics filter", async () => {
+      // trade_type=sell, commodity=retro_organics → port buys RO → code[1]="B"
+      // Sector 2 (SBB): position 1 = "B" → matches
+      const result = await apiOk("list_known_ports", {
+        character_id: p1Id,
+        commodity: "retro_organics",
+        trade_type: "sell",
+        max_hops: 1,
+      });
+      assertExists((result as Record<string, unknown>).request_id);
+    });
+
+    await t.step("verify event has results", async () => {
+      const events = await eventsOfType(p1Id, "ports.list", cursor);
+      assert(events.length >= 1);
+      const payload = events[events.length - 1].payload as Record<string, unknown>;
+      assertEquals(payload.commodity, "retro_organics");
+      assertEquals(payload.trade_type, "sell");
+      const totalPorts = payload.total_ports_found as number;
+      assert(totalPorts >= 1, `Expected >= 1 port for sell retro_organics, got ${totalPorts}`);
+    });
+  },
+});
+
+// ============================================================================
+// Group 48: list_known_ports — buy neuro_symbolics (sell price from port)
+// ============================================================================
+
+Deno.test({
+  name: "query_endpoints — list_known_ports buy neuro_symbolics",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn(t) {
+    await t.step("reset, visit sector 1", async () => {
+      await resetDatabase([P1]);
+      await apiOk("join", { character_id: p1Id });
+      // Sector 1 has BBS: Sells NS (position 2 = "S")
+      await apiOk("move", { character_id: p1Id, to_sector: 1 });
+      await apiOk("move", { character_id: p1Id, to_sector: 0 });
+    });
+
+    let cursor: number;
+    await t.step("capture cursor", async () => {
+      cursor = await getEventCursor(p1Id);
+    });
+
+    await t.step("buy neuro_symbolics filter", async () => {
+      // trade_type=buy, commodity=neuro_symbolics → port sells NS → code[2]="S"
+      const result = await apiOk("list_known_ports", {
+        character_id: p1Id,
+        commodity: "neuro_symbolics",
+        trade_type: "buy",
+        max_hops: 1,
+      });
+      assertExists((result as Record<string, unknown>).request_id);
+    });
+
+    await t.step("verify event has results", async () => {
+      const events = await eventsOfType(p1Id, "ports.list", cursor);
+      assert(events.length >= 1);
+      const payload = events[events.length - 1].payload as Record<string, unknown>;
+      assertEquals(payload.commodity, "neuro_symbolics");
+      assertEquals(payload.trade_type, "buy");
+      const totalPorts = payload.total_ports_found as number;
+      assert(totalPorts >= 1, `Expected >= 1 port for buy neuro_symbolics, got ${totalPorts}`);
     });
   },
 });
