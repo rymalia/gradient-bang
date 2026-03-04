@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { WeaveSpan } from "./weave.ts";
 
+import { acquirePgClient } from "./pg.ts";
 import { resolvePlayerType } from "./status.ts";
 import { isMegaPortSector, loadUniverseMeta } from "./fedspace.ts";
 import { buildPortData, getPortPrices, getPortStock } from "./trading.ts";
@@ -1067,7 +1068,7 @@ export async function findShortestPath(
 
   // Load the full adjacency graph in a single query
   const sLoad = ws.span("load_all_adjacencies");
-  const adjacency = await fetchAllAdjacencies(supabase);
+  const adjacency = await fetchAllAdjacencies();
   sLoad.end({ sectorCount: adjacency.size });
 
   if (!adjacency.has(fromSector)) {
@@ -1125,21 +1126,21 @@ export async function findShortestPath(
  * Load all sector adjacencies from universe_structure in a single query.
  * Returns a Map from sector_id to an array of neighbor sector_ids.
  */
-export async function fetchAllAdjacencies(
-  supabase: SupabaseClient,
-): Promise<Map<number, number[]>> {
-  const { data, error } = await supabase
-    .from("universe_structure")
-    .select("sector_id, warps");
-  if (error) {
-    throw new Error(`failed to load universe adjacencies: ${error.message}`);
+export async function fetchAllAdjacencies(): Promise<Map<number, number[]>> {
+  const pg = await acquirePgClient();
+  try {
+    const result = await pg.queryObject<{ sector_id: number; warps: unknown }>(
+      `SELECT sector_id::int, warps FROM universe_structure`,
+    );
+    const map = new Map<number, number[]>();
+    for (const row of result.rows) {
+      const edges = parseWarpEdges(row.warps);
+      map.set(row.sector_id, edges.map((e) => e.to));
+    }
+    return map;
+  } finally {
+    pg.release();
   }
-  const map = new Map<number, number[]>();
-  for (const row of data ?? []) {
-    const edges = parseWarpEdges(row.warps);
-    map.set(row.sector_id, edges.map((e) => e.to));
-  }
-  return map;
 }
 
 export async function buildLocalMapRegion(
@@ -1187,7 +1188,7 @@ export async function buildLocalMapRegion(
   >();
 
   // Load all universe adjacencies upfront for pure in-memory BFS
-  const allAdjacencies = await fetchAllAdjacencies(supabase);
+  const allAdjacencies = await fetchAllAdjacencies();
 
   const hydrateUniverseRows = async (sectorIds: number[]): Promise<void> => {
     const missing = sectorIds.filter((id) => !universeRowCache.has(id));
@@ -1909,7 +1910,7 @@ export async function buildPathRegionPayload(
   const unvisitedSeen = new Map<number, Set<number>>();
 
   // Load all universe adjacencies upfront for pure in-memory BFS
-  const allAdjacencies = await fetchAllAdjacencies(supabase);
+  const allAdjacencies = await fetchAllAdjacencies();
 
   const getAdjacency = (sectorId: number): number[] => {
     const knowledgeEntry = knowledge.sectors_visited[String(sectorId)];

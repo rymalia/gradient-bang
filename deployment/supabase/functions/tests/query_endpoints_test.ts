@@ -1802,3 +1802,338 @@ Deno.test({
     });
   },
 });
+
+// ============================================================================
+// Group 49: list_known_ports — BFS expansion from non-port sector
+// ============================================================================
+
+Deno.test({
+  name: "query_endpoints — list_known_ports BFS expands from non-port sector",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn(t) {
+    // Sector 0 has NO port. Sectors 1 (BBS) and 2 (SBB) are adjacent to 0.
+    // If BFS doesn't expand, 0 ports will be found.
+    await t.step("reset and visit sectors 0, 1, 2", async () => {
+      await resetDatabase([P1]);
+      await apiOk("join", { character_id: p1Id });
+      // join puts us at sector 0; move to 1 then 2 then back to 0
+      await apiOk("move", { character_id: p1Id, to_sector: 1 });
+      await apiOk("move", { character_id: p1Id, to_sector: 0 });
+      await apiOk("move", { character_id: p1Id, to_sector: 2 });
+      await apiOk("move", { character_id: p1Id, to_sector: 0 });
+      // Ship at sector 0 (no port); visited: 0, 1, 2
+    });
+
+    let cursor: number;
+    await t.step("capture cursor", async () => {
+      cursor = await getEventCursor(p1Id);
+    });
+
+    await t.step("list ports from sector 0, max_hops=1", async () => {
+      await apiOk("list_known_ports", {
+        character_id: p1Id,
+        max_hops: 1,
+      });
+    });
+
+    await t.step("verify BFS found ports at hop 1", async () => {
+      const events = await eventsOfType(p1Id, "ports.list", cursor);
+      assert(events.length >= 1, "Should have ports.list event");
+      const payload = events[events.length - 1].payload as Record<string, unknown>;
+
+      assertEquals(payload.from_sector, 0, "from_sector should be 0");
+
+      const ports = payload.ports as Array<Record<string, unknown>>;
+      assert(
+        ports.length >= 2,
+        `Expected >= 2 ports from sector 0 with max_hops=1 (sectors 1 and 2 have ports), got ${ports.length}`,
+      );
+
+      // Sector 1 (BBS) at hop 1
+      const s1 = ports.find(
+        (p) => ((p.sector as Record<string, unknown>)?.id as number) === 1,
+      );
+      assertExists(s1, "Should find sector 1 port (BBS) at hop 1");
+      assertEquals(s1!.hops_from_start, 1, "Sector 1 should be 1 hop away");
+
+      // Sector 2 (SBB) at hop 1
+      const s2 = ports.find(
+        (p) => ((p.sector as Record<string, unknown>)?.id as number) === 2,
+      );
+      assertExists(s2, "Should find sector 2 port (SBB) at hop 1");
+      assertEquals(s2!.hops_from_start, 1, "Sector 2 should be 1 hop away");
+
+      // No port at sector 0 itself (it has no port)
+      const s0 = ports.find(
+        (p) => ((p.sector as Record<string, unknown>)?.id as number) === 0,
+      );
+      assertEquals(s0, undefined, "Sector 0 should not appear (no port)");
+
+      // searched_sectors should reflect multi-sector BFS
+      const searched = payload.searched_sectors as number;
+      assert(searched > 1, `Expected searched_sectors > 1, got ${searched}`);
+    });
+  },
+});
+
+// ============================================================================
+// Group 50: list_known_ports — BFS finds ports at increasing hop distances
+// ============================================================================
+
+Deno.test({
+  name: "query_endpoints — list_known_ports progressive hop discovery",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn(t) {
+    // Visit sectors 0 → 1 → 3. Ship at sector 0.
+    // Sector 0: no port. Sector 1: BBS (hop 1). Sector 3: BSS (hop 2 via 0→1→3).
+    await t.step("reset and visit sectors 0, 1, 3 then return to 0", async () => {
+      await resetDatabase([P1]);
+      await apiOk("join", { character_id: p1Id });
+      await apiOk("move", { character_id: p1Id, to_sector: 1 });
+      await apiOk("move", { character_id: p1Id, to_sector: 3 });
+      await apiOk("move", { character_id: p1Id, to_sector: 1 });
+      await apiOk("move", { character_id: p1Id, to_sector: 0 });
+      // Ship at sector 0; visited: 0, 1, 3
+    });
+
+    let cursor: number;
+
+    // max_hops=0: no ports (sector 0 has no port)
+    await t.step("max_hops=0 finds 0 ports at non-port sector", async () => {
+      cursor = await getEventCursor(p1Id);
+      await apiOk("list_known_ports", {
+        character_id: p1Id,
+        max_hops: 0,
+      });
+      const events = await eventsOfType(p1Id, "ports.list", cursor);
+      assert(events.length >= 1);
+      const payload = events[events.length - 1].payload as Record<string, unknown>;
+      assertEquals(payload.total_ports_found, 0, "max_hops=0 at sector 0 should find 0 ports");
+      assertEquals(payload.searched_sectors, 1, "max_hops=0 should search exactly 1 sector");
+    });
+
+    // max_hops=1: finds sector 1 port only
+    await t.step("max_hops=1 finds sector 1 port", async () => {
+      cursor = await getEventCursor(p1Id);
+      await apiOk("list_known_ports", {
+        character_id: p1Id,
+        max_hops: 1,
+      });
+      const events = await eventsOfType(p1Id, "ports.list", cursor);
+      assert(events.length >= 1);
+      const payload = events[events.length - 1].payload as Record<string, unknown>;
+      const ports = payload.ports as Array<Record<string, unknown>>;
+      const totalPorts = payload.total_ports_found as number;
+      assert(totalPorts >= 1, `Expected >= 1 port with max_hops=1, got ${totalPorts}`);
+
+      const s1 = ports.find(
+        (p) => ((p.sector as Record<string, unknown>)?.id as number) === 1,
+      );
+      assertExists(s1, "max_hops=1 should find sector 1 (BBS)");
+      assertEquals(s1!.hops_from_start, 1);
+    });
+
+    // max_hops=2: finds sector 1 AND sector 3
+    await t.step("max_hops=2 finds sectors 1 and 3", async () => {
+      cursor = await getEventCursor(p1Id);
+      await apiOk("list_known_ports", {
+        character_id: p1Id,
+        max_hops: 2,
+      });
+      const events = await eventsOfType(p1Id, "ports.list", cursor);
+      assert(events.length >= 1);
+      const payload = events[events.length - 1].payload as Record<string, unknown>;
+      const ports = payload.ports as Array<Record<string, unknown>>;
+      const totalPorts = payload.total_ports_found as number;
+      assert(totalPorts >= 2, `Expected >= 2 ports with max_hops=2, got ${totalPorts}`);
+
+      const s1 = ports.find(
+        (p) => ((p.sector as Record<string, unknown>)?.id as number) === 1,
+      );
+      assertExists(s1, "max_hops=2 should find sector 1 (BBS)");
+
+      const s3 = ports.find(
+        (p) => ((p.sector as Record<string, unknown>)?.id as number) === 3,
+      );
+      assertExists(s3, "max_hops=2 should find sector 3 (BSS)");
+    });
+  },
+});
+
+// ============================================================================
+// Group 51: list_known_ports — BFS across long chain finds distant ports
+// ============================================================================
+
+Deno.test({
+  name: "query_endpoints — list_known_ports long chain port discovery",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn(t) {
+    // Visit chain: 0 → 1 → 3 → 7 → 9 (port BBB). Then return to sector 0.
+    // From sector 0: sector 9 should be reachable within max_hops=5.
+    await t.step("reset and visit long chain 0→1→3→7→9", async () => {
+      await resetDatabase([P1]);
+      await apiOk("join", { character_id: p1Id });
+      await apiOk("move", { character_id: p1Id, to_sector: 1 });
+      await apiOk("move", { character_id: p1Id, to_sector: 3 });
+      await apiOk("move", { character_id: p1Id, to_sector: 7 });
+      await apiOk("move", { character_id: p1Id, to_sector: 9 });
+      // Return to sector 0
+      await apiOk("move", { character_id: p1Id, to_sector: 7 });
+      await apiOk("move", { character_id: p1Id, to_sector: 3 });
+      await apiOk("move", { character_id: p1Id, to_sector: 1 });
+      await apiOk("move", { character_id: p1Id, to_sector: 0 });
+      // Ship at sector 0; visited: 0, 1, 3, 7, 9
+    });
+
+    let cursor: number;
+    await t.step("capture cursor", async () => {
+      cursor = await getEventCursor(p1Id);
+    });
+
+    await t.step("list ports with max_hops=5 finds all chain ports", async () => {
+      await apiOk("list_known_ports", {
+        character_id: p1Id,
+        max_hops: 5,
+      });
+
+      const events = await eventsOfType(p1Id, "ports.list", cursor);
+      assert(events.length >= 1);
+      const payload = events[events.length - 1].payload as Record<string, unknown>;
+      const ports = payload.ports as Array<Record<string, unknown>>;
+      const totalPorts = payload.total_ports_found as number;
+
+      // Should find ports at: sector 1 (BBS), sector 3 (BSS), sector 9 (BBB)
+      assert(totalPorts >= 3, `Expected >= 3 ports along chain, got ${totalPorts}`);
+
+      const s1 = ports.find(
+        (p) => ((p.sector as Record<string, unknown>)?.id as number) === 1,
+      );
+      assertExists(s1, "Should find sector 1 (BBS)");
+
+      const s3 = ports.find(
+        (p) => ((p.sector as Record<string, unknown>)?.id as number) === 3,
+      );
+      assertExists(s3, "Should find sector 3 (BSS)");
+
+      const s9 = ports.find(
+        (p) => ((p.sector as Record<string, unknown>)?.id as number) === 9,
+      );
+      assertExists(s9, "Should find sector 9 (BBB)");
+
+      // Verify hop ordering: sector 1 < sector 3 < sector 9
+      assert(
+        (s1!.hops_from_start as number) < (s3!.hops_from_start as number),
+        "Sector 1 should be closer than sector 3",
+      );
+      assert(
+        (s3!.hops_from_start as number) <= (s9!.hops_from_start as number),
+        "Sector 3 should be closer than or equal to sector 9",
+      );
+    });
+  },
+});
+
+// ============================================================================
+// Group 52: list_known_ports — from_sector override with BFS expansion
+// ============================================================================
+
+Deno.test({
+  name: "query_endpoints — list_known_ports from_sector override expands BFS",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn(t) {
+    // Visit sectors 0, 1, 3. Ship stays at sector 3.
+    // Use from_sector=1 to start BFS from sector 1 instead.
+    await t.step("reset and visit 0 → 1 → 3", async () => {
+      await resetDatabase([P1]);
+      await apiOk("join", { character_id: p1Id });
+      await apiOk("move", { character_id: p1Id, to_sector: 1 });
+      await apiOk("move", { character_id: p1Id, to_sector: 3 });
+      // Ship at sector 3; visited: 0, 1, 3
+    });
+
+    let cursor: number;
+    await t.step("capture cursor", async () => {
+      cursor = await getEventCursor(p1Id);
+    });
+
+    await t.step("list ports from_sector=1, max_hops=1", async () => {
+      await apiOk("list_known_ports", {
+        character_id: p1Id,
+        from_sector: 1,
+        max_hops: 1,
+      });
+
+      const events = await eventsOfType(p1Id, "ports.list", cursor);
+      assert(events.length >= 1);
+      const payload = events[events.length - 1].payload as Record<string, unknown>;
+      assertEquals(payload.from_sector, 1, "from_sector should be 1");
+
+      const ports = payload.ports as Array<Record<string, unknown>>;
+      const totalPorts = payload.total_ports_found as number;
+
+      // From sector 1: sector 1 at hop 0 (BBS), sector 3 at hop 1 (BSS, adjacent)
+      assert(totalPorts >= 2, `Expected >= 2 ports from sector 1 with max_hops=1, got ${totalPorts}`);
+
+      const s1 = ports.find(
+        (p) => ((p.sector as Record<string, unknown>)?.id as number) === 1,
+      );
+      assertExists(s1, "Should find sector 1 (BBS) at hop 0");
+      assertEquals(s1!.hops_from_start, 0);
+
+      const s3 = ports.find(
+        (p) => ((p.sector as Record<string, unknown>)?.id as number) === 3,
+      );
+      assertExists(s3, "Should find sector 3 (BSS) at hop 1");
+      assertEquals(s3!.hops_from_start, 1);
+    });
+  },
+});
+
+// ============================================================================
+// Group 53: list_known_ports — searched_sectors reflects BFS expansion
+// ============================================================================
+
+Deno.test({
+  name: "query_endpoints — list_known_ports searched_sectors accuracy",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn(t) {
+    // Visit sectors 0 and 1. From sector 0 with max_hops=1,
+    // BFS should search multiple sectors (not just 1).
+    await t.step("reset and visit sectors 0, 1", async () => {
+      await resetDatabase([P1]);
+      await apiOk("join", { character_id: p1Id });
+      await apiOk("move", { character_id: p1Id, to_sector: 1 });
+      await apiOk("move", { character_id: p1Id, to_sector: 0 });
+      // Ship at sector 0; visited: 0, 1
+    });
+
+    let cursor: number;
+    await t.step("capture cursor", async () => {
+      cursor = await getEventCursor(p1Id);
+    });
+
+    await t.step("verify searched_sectors > 1 for max_hops > 0", async () => {
+      await apiOk("list_known_ports", {
+        character_id: p1Id,
+        max_hops: 1,
+      });
+
+      const events = await eventsOfType(p1Id, "ports.list", cursor);
+      assert(events.length >= 1);
+      const payload = events[events.length - 1].payload as Record<string, unknown>;
+
+      const searched = payload.searched_sectors as number;
+      // Sector 0 has 3 neighbors (1, 2, 5), so at max_hops=1 we should
+      // search 1 (sector 0) + 3 (neighbors) = 4 sectors
+      assert(
+        searched >= 4,
+        `Expected searched_sectors >= 4 from sector 0 with max_hops=1, got ${searched}`,
+      );
+    });
+  },
+});

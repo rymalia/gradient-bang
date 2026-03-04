@@ -415,7 +415,7 @@ async function handleListKnownPorts(
   const sParallelLoad = ws.span("parallel_load_ports_and_adjacencies");
   const [portRows, adjacency] = await Promise.all([
     fetchPortRows(supabase, visitedIds),
-    fetchAllAdjacencies(supabase),
+    fetchAllAdjacencies(),
   ]);
   const portMap = new Map(portRows.map((row) => [row.sector_id, row]));
   sParallelLoad.end({
