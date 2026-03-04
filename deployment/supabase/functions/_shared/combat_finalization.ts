@@ -32,6 +32,7 @@ interface ShipDefinitionRow {
   ship_type: string;
   display_name: string;
   purchase_price: number | null;
+  warp_power_capacity: number;
 }
 
 /**
@@ -100,7 +101,7 @@ async function loadShipDefinitionMap(
   const unique = Array.from(new Set(shipTypes));
   const { data, error } = await supabase
     .from<ShipDefinitionRow>("ship_definitions")
-    .select("ship_type, display_name, purchase_price")
+    .select("ship_type, display_name, purchase_price, warp_power_capacity")
     .in("ship_type", unique);
   if (error) {
     console.error("combat_finalization.load_defs", error);
@@ -112,7 +113,11 @@ async function loadShipDefinitionMap(
 async function convertShipToEscapePod(
   supabase: SupabaseClient,
   shipId: string,
+  shipDefs: Map<string, ShipDefinitionRow>,
 ): Promise<void> {
+  const escapePodDef = shipDefs.get("escape_pod");
+  const warpPower = escapePodDef?.warp_power_capacity ?? 800;
+
   const { error } = await supabase
     .from("ship_instances")
     .update({
@@ -120,7 +125,7 @@ async function convertShipToEscapePod(
       ship_name: "Escape Pod",
       current_fighters: 0,
       current_shields: 0,
-      current_warp_power: 0,
+      current_warp_power: warpPower,
       cargo_qf: 0,
       cargo_ro: 0,
       cargo_ns: 0,
@@ -156,6 +161,7 @@ async function handleDefeatedCharacter(
   encounter: CombatEncounterState,
   participant: CombatantState,
   definition: ShipDefinitionRow | undefined,
+  shipDefs: Map<string, ShipDefinitionRow>,
 ): Promise<HandleDefeatedResult> {
   const metadata = (participant.metadata ?? {}) as Record<string, unknown>;
   const shipId = typeof metadata.ship_id === "string" ? metadata.ship_id : null;
@@ -230,7 +236,7 @@ async function handleDefeatedCharacter(
     };
   } else {
     // Human ships: convert to escape pod immediately
-    await convertShipToEscapePod(supabase, shipId);
+    await convertShipToEscapePod(supabase, shipId, shipDefs);
     return {
       salvage,
       deferredDeletion: null,
@@ -290,6 +296,10 @@ export async function finalizeCombat(
     )
     .map((participant) => participant.ship_type ?? "")
     .filter(Boolean);
+  // Include escape_pod so we can look up its warp_power_capacity
+  if (!shipTypes.includes("escape_pod")) {
+    shipTypes.push("escape_pod");
+  }
   const definitionMap = await loadShipDefinitionMap(supabase, shipTypes);
 
   for (const [pid] of defeated) {
@@ -313,6 +323,7 @@ export async function finalizeCombat(
       encounter,
       participant,
       def,
+      definitionMap,
     );
 
     if (result.salvage) {
