@@ -557,6 +557,10 @@ export interface QuestStatusMessage extends ServerMessagePayload {
   quests: Quest[]
 }
 
+export interface QuestReward {
+  credits?: number
+}
+
 export interface QuestStepCompletedMessage extends ServerMessagePayload {
   quest_id: string
   quest_code: string
@@ -565,6 +569,7 @@ export interface QuestStepCompletedMessage extends ServerMessagePayload {
   step_name: string
   step_index: number
   next_step?: QuestStep
+  reward?: QuestReward
 }
 
 export interface QuestProgressMessage extends ServerMessagePayload {
@@ -579,4 +584,5 @@ export interface QuestCompletedMessage extends ServerMessagePayload {
   quest_id: string
   quest_code: string
   quest_name: string
+  reward?: QuestReward
 }

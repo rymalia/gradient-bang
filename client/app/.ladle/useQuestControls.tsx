@@ -16,6 +16,12 @@ const STEPS_BY_CODE: Record<string, QuestStep[]> = {
   tutorial_corporations: MOCK_TUTORIAL_CORPS_STEPS,
 }
 
+// Reward credits per step, keyed by quest code → step_index
+const STEP_REWARDS: Record<string, Record<number, number>> = {
+  tutorial: { 1: 50, 2: 100, 3: 75, 4: 100, 5: 500, 6: 1000, 7: 250 },
+  tutorial_corporations: { 1: 500, 2: 1000 },
+}
+
 export const useQuestControls = () => {
   const quests = useGameStore.use.quests()
   const setQuests = useGameStore.use.setQuests()
@@ -57,12 +63,14 @@ export const useQuestControls = () => {
               (s) => s.step_index === quest.current_step.step_index + 1
             )
 
+            const rewardCredits = STEP_REWARDS[quest.code]?.[quest.current_step.step_index]
             updateQuestStepCompleted(quest.quest_id, quest.current_step.step_index, nextMockStep)
             setQuestCompletionData({
               type: "step",
               questName: quest.name,
               completedStepName: quest.current_step.name,
               nextStep: nextMockStep ?? quest.current_step,
+              reward: rewardCredits ? { credits: rewardCredits } : undefined,
             })
             setNotifications({ questCompleted: true })
           }),
@@ -70,10 +78,13 @@ export const useQuestControls = () => {
             const questId = get("Quests.Active Quest")
             const quest = quests.find((q) => q.quest_id === questId)
             if (!quest) return
+            const lastStepIndex = (STEPS_BY_CODE[quest.code] ?? []).length
+            const rewardCredits = STEP_REWARDS[quest.code]?.[lastStepIndex]
             setQuestCompletionData({
               type: "quest",
               completedQuestName: quest.name,
               snapshotQuestIds: [],
+              reward: rewardCredits ? { credits: rewardCredits } : undefined,
             })
             completeQuest(quest.quest_id)
             setNotifications({ questCompleted: true })

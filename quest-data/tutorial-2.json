@@ -16,6 +16,7 @@
         "corporation.member_joined"
       ],
       "target_value": 1,
+      "reward_credits": 500,
       "meta": {
         "codec": {
           "giver_id": "commander_voss",
@@ -36,6 +37,7 @@
         "task.start"
       ],
       "target_value": 1,
+      "reward_credits": 1000,
       "payload_filter": {
         "task_scope": "corp_ship"
       },

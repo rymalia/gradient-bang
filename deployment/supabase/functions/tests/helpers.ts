@@ -648,10 +648,10 @@ export async function seedQuestDefinitions(): Promise<void> {
     const tutorialSteps: Array<{
       idx: number; name: string; eval: string;
       events: string[]; target: number;
-      filter?: string; aggField?: string;
+      filter?: string; aggField?: string; rewardCredits?: number;
     }> = [
-      { idx: 1, name: "Travel to any adjacent sector", eval: "count", events: ["movement.complete"], target: 1 },
-      { idx: 2, name: "Locate the Megaport", eval: "count_filtered", events: ["movement.complete"], target: 1, filter: '{"has_megaport":true}' },
+      { idx: 1, name: "Travel to any adjacent sector", eval: "count", events: ["movement.complete"], target: 1, rewardCredits: 50 },
+      { idx: 2, name: "Locate the Megaport", eval: "count_filtered", events: ["movement.complete"], target: 1, filter: '{"has_megaport":true}', rewardCredits: 100 },
       { idx: 3, name: "Refuel your ship", eval: "count", events: ["warp.purchase"], target: 1 },
       { idx: 4, name: "Purchase a commodity", eval: "count", events: ["trade.executed"], target: 1 },
       { idx: 5, name: "Earn 1000 credits trading", eval: "aggregate", events: ["trade.executed"], target: 1000, aggField: "profit" },
@@ -661,10 +661,10 @@ export async function seedQuestDefinitions(): Promise<void> {
 
     for (const s of tutorialSteps) {
       await pg.queryObject(
-        `INSERT INTO quest_step_definitions (quest_id, step_index, name, eval_type, event_types, target_value, payload_filter, aggregate_field)
-         VALUES ($1, $2, $3, $4, $5::text[], $6, $7::jsonb, $8)
+        `INSERT INTO quest_step_definitions (quest_id, step_index, name, eval_type, event_types, target_value, payload_filter, aggregate_field, reward_credits)
+         VALUES ($1, $2, $3, $4, $5::text[], $6, $7::jsonb, $8, $9)
          ON CONFLICT (quest_id, step_index) DO NOTHING`,
-        [tutorialId, s.idx, s.name, s.eval, s.events, s.target, s.filter ?? "{}", s.aggField ?? null],
+        [tutorialId, s.idx, s.name, s.eval, s.events, s.target, s.filter ?? "{}", s.aggField ?? null, s.rewardCredits ?? null],
       );
     }
 
@@ -682,18 +682,18 @@ export async function seedQuestDefinitions(): Promise<void> {
 
     const corpSteps: Array<{
       idx: number; name: string; eval: string;
-      events: string[]; target: number; filter?: string;
+      events: string[]; target: number; filter?: string; rewardCredits?: number;
     }> = [
-      { idx: 1, name: "Create or join a corporation", eval: "count", events: ["corporation.created", "corporation.member_joined"], target: 1 },
-      { idx: 2, name: "Run a task on a corp ship", eval: "count_filtered", events: ["task.start"], target: 1, filter: '{"task_scope":"corp_ship"}' },
+      { idx: 1, name: "Create or join a corporation", eval: "count", events: ["corporation.created", "corporation.member_joined"], target: 1, rewardCredits: 500 },
+      { idx: 2, name: "Run a task on a corp ship", eval: "count_filtered", events: ["task.start"], target: 1, filter: '{"task_scope":"corp_ship"}', rewardCredits: 1000 },
     ];
 
     for (const s of corpSteps) {
       await pg.queryObject(
-        `INSERT INTO quest_step_definitions (quest_id, step_index, name, eval_type, event_types, target_value, payload_filter)
-         VALUES ($1, $2, $3, $4, $5::text[], $6, $7::jsonb)
+        `INSERT INTO quest_step_definitions (quest_id, step_index, name, eval_type, event_types, target_value, payload_filter, reward_credits)
+         VALUES ($1, $2, $3, $4, $5::text[], $6, $7::jsonb, $8)
          ON CONFLICT (quest_id, step_index) DO NOTHING`,
-        [tutCorpId, s.idx, s.name, s.eval, s.events, s.target, s.filter ?? "{}"],
+        [tutCorpId, s.idx, s.name, s.eval, s.events, s.target, s.filter ?? "{}", s.rewardCredits ?? null],
       );
     }
 

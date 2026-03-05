@@ -134,39 +134,28 @@ fi
 # Step 1: Truncate all game data tables
 # ---------------------------------------------------------------------------
 
-echo "[reset-world] Step 1/4 -- Truncating game data tables ..."
+echo "[reset-world] Step 1/4 -- Truncating all public tables (preserving auth + config) ..."
 
+# Dynamically find and truncate all public tables except preserved ones
 run_sql "
-  TRUNCATE TABLE
-    quest_progress_events,
-    player_quest_steps,
-    player_quests,
-    quest_event_subscriptions,
-    quest_step_definitions,
-    quest_definitions,
-    event_character_recipients,
-    event_broadcast_recipients,
-    events,
-    port_transactions,
-    rate_limits,
-    admin_actions,
-    leaderboard_cache,
-    corporation_members,
-    corporation_ships,
-    corporation_map_knowledge,
-    garrisons,
-    ship_instances,
-    user_characters,
-    characters,
-    corporations,
-    sector_contents,
-    ports,
-    universe_structure,
-    universe_config
-  CASCADE;
+  DO \$\$
+  DECLARE
+    tbl TEXT;
+    preserved TEXT[] := ARRAY['app_runtime_config', 'ship_definitions'];
+  BEGIN
+    FOR tbl IN
+      SELECT tablename FROM pg_tables
+      WHERE schemaname = 'public'
+        AND tablename != ALL(preserved)
+      ORDER BY tablename
+    LOOP
+      EXECUTE format('TRUNCATE TABLE public.%I CASCADE', tbl);
+      RAISE NOTICE 'Truncated: %', tbl;
+    END LOOP;
+  END \$\$;
 "
 
-echo "[reset-world] Game data truncated. auth.users preserved."
+echo "[reset-world] All public tables truncated. auth.users and app_runtime_config preserved."
 echo ""
 
 # ---------------------------------------------------------------------------

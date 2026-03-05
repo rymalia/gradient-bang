@@ -17,6 +17,7 @@
         "movement.complete"
       ],
       "target_value": 1,
+      "reward_credits": 50,
       "meta": {
         "codec": {
           "giver_id": "cadet_amy",
@@ -38,6 +39,7 @@
         "movement.complete"
       ],
       "target_value": 1,
+      "reward_credits": 100,
       "payload_filter": {
         "has_megaport": true
       },
@@ -60,6 +62,7 @@
         "warp.purchase"
       ],
       "target_value": 1,
+      "reward_credits": 75,
       "meta": {
         "codec": {
           "giver_id": "cadet_amy",
@@ -78,7 +81,8 @@
       "event_types": [
         "trade.executed"
       ],
-      "target_value": 1
+      "target_value": 1,
+      "reward_credits": 100
     },
     {
       "step_index": 5,
@@ -89,6 +93,7 @@
         "trade.executed"
       ],
       "target_value": 1000,
+      "reward_credits": 500,
       "aggregate_field": "profit",
       "meta": {
         "codec": {
@@ -98,7 +103,8 @@
             "<emotion value=\"content\">Great, you've made your first trade!</emotion> Now here's the thing — that Sparrow you're flying is a loaner from the Federation. It's fine for getting started, but you're going to want your own ship.",
             "<emotion value=\"anticipation\">Our goal is to upgrade you to a Kestrel Courier.</emotion> It's fast, reliable, and it's yours to keep. To get there, you'll need to earn some credits. Keep trading between ports — buy low, sell high — and you'll have enough in no time."
           ]
-        }
+        },
+        "denominator": "credits"
       }
     },
     {
@@ -110,6 +116,7 @@
         "ship.traded_in"
       ],
       "target_value": 1,
+      "reward_credits": 1000,
       "payload_filter": {
         "new_ship_type": "kestrel_courier"
       }
@@ -123,6 +130,7 @@
         "quest.assigned"
       ],
       "target_value": 1,
+      "reward_credits": 250,
       "payload_filter": {
         "quest_code": "tutorial_corporations"
       },

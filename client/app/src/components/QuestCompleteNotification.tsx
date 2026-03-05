@@ -128,43 +128,55 @@ export const QuestCompleteNotification = () => {
                 {phase === "check" && (
                   <motion.div
                     key="completed"
-                    className="flex items-center gap-3"
+                    className="flex flex-col items-center gap-2"
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, x: -60, scale: 0.95 }}
                     transition={{ duration: 0.4, delay: 0.4 }}
                   >
-                    <motion.svg
-                      width="28"
-                      height="28"
-                      viewBox="0 0 28 28"
-                      fill="none"
-                      className="text-terminal shrink-0"
-                    >
-                      <motion.circle
-                        cx="14"
-                        cy="14"
-                        r="12"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
+                    <div className="flex items-center gap-3">
+                      <motion.svg
+                        width="28"
+                        height="28"
+                        viewBox="0 0 28 28"
                         fill="none"
-                        initial={{ pathLength: 0, opacity: 0 }}
-                        animate={{ pathLength: 1, opacity: 1 }}
-                        transition={{ duration: 0.5, delay: 0.6, ease: "easeOut" }}
-                      />
-                      <motion.path
-                        d="M8 14.5l4 4 8-9"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        fill="none"
-                        initial={{ pathLength: 0 }}
-                        animate={{ pathLength: 1 }}
-                        transition={{ duration: 0.4, delay: 1.0, ease: "easeOut" }}
-                      />
-                    </motion.svg>
-                    <span className="text-lg font-bold text-foreground">{completedName}</span>
+                        className="text-terminal shrink-0"
+                      >
+                        <motion.circle
+                          cx="14"
+                          cy="14"
+                          r="12"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                          fill="none"
+                          initial={{ pathLength: 0, opacity: 0 }}
+                          animate={{ pathLength: 1, opacity: 1 }}
+                          transition={{ duration: 0.5, delay: 0.6, ease: "easeOut" }}
+                        />
+                        <motion.path
+                          d="M8 14.5l4 4 8-9"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          fill="none"
+                          initial={{ pathLength: 0 }}
+                          animate={{ pathLength: 1 }}
+                          transition={{ duration: 0.4, delay: 1.0, ease: "easeOut" }}
+                        />
+                      </motion.svg>
+                      <span className="text-lg font-bold text-foreground">{completedName}</span>
+                    </div>
+                    {questCompletionData.reward?.credits && (
+                      <motion.span
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.4, delay: 1.2 }}
+                        className="text-sm font-medium text-terminal"
+                      >
+                        +{questCompletionData.reward.credits.toLocaleString()} credits
+                      </motion.span>
+                    )}
                   </motion.div>
                 )}
 

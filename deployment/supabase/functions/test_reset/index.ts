@@ -151,6 +151,8 @@ const PINNED_SECTORS: Record<string, number> = {
   // Task lifecycle tests: sector 0
   test_task_p1: 0,
   test_task_p2: 0,
+  // Quest rewards tests: sector 0 (mega-port)
+  test_qr_p1: 0,
 };
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");

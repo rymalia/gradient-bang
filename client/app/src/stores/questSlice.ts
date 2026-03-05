@@ -7,11 +7,13 @@ export type QuestCompletionData =
       questName: string
       completedStepName: string
       nextStep: QuestStep
+      reward?: { credits?: number }
     }
   | {
       type: "quest"
       completedQuestName: string
       snapshotQuestIds: string[]
+      reward?: { credits?: number }
     }
 
 export interface QuestSlice {
@@ -42,7 +44,10 @@ export const createQuestSlice: StateCreator<QuestSlice> = (set, get) => ({
         if (codecQuest) {
           const s = state as Record<string, any>
           s.notifications.incomingCodec = codecQuest.quest_id
-          if (s.activePanel !== "contracts" && !s.notifications.seenContractCodecs.includes(codecQuest.quest_id)) {
+          if (
+            s.activePanel !== "contracts" &&
+            !s.notifications.seenContractCodecs.includes(codecQuest.quest_id)
+          ) {
             s.notifications.seenContractCodecs.push(codecQuest.quest_id)
           }
         }
@@ -79,7 +84,10 @@ export const createQuestSlice: StateCreator<QuestSlice> = (set, get) => ({
         if (nextStep?.meta?.codec) {
           const s = state as Record<string, any>
           s.notifications.incomingCodec = questId
-          if (s.activePanel !== "contracts" && !s.notifications.seenContractCodecs.includes(questId)) {
+          if (
+            s.activePanel !== "contracts" &&
+            !s.notifications.seenContractCodecs.includes(questId)
+          ) {
             s.notifications.seenContractCodecs.push(questId)
           }
         }

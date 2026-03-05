@@ -11,7 +11,7 @@ export const MOCK_QUEST_STEPS: QuestStep[] = [
         giver: "Amy, Federation Cadet",
         pages: [
           '<emotion value="excitable">Welcome to the galaxy, pilot! <emotion value="content" />I\'m Amy, a representative from the Federation, and I\'ll be guiding you through your first steps as a spacefaring trader.',
-          '<emotion value="neutral" /> In this tutorial, we\'ll cover the basics of navigation, trading, and survival in the galaxy. Don\'t worry, it\'s easier than it sounds! Let\'s get started.',
+          "<emotion value=\"neutral\" /> In this tutorial, we'll cover the basics of navigation, trading, and survival in the galaxy. Don't worry, it's easier than it sounds! Let's get started.",
           '<emotion value="anticipation">Your first task is to travel to an adjacent sector.</emotion> Use your ship\'s warp drive to move to a neighboring location. This will allow you to explore new areas and find opportunities for trading and adventure. Good luck!',
         ],
       },
@@ -208,4 +208,5 @@ export const MOCK_QUEST_STEP_COMPLETED: QuestStepCompletedMessage = {
   quest_code: "tutorial",
   quest_name: "Taking Flight",
   step_index: 1,
+  reward: { credits: 50 },
 }

@@ -83,6 +83,12 @@ class QuestLoader:
                     f"{filepath.name}: step {idx} 'event_types' must be a non-empty array"
                 )
 
+            if "reward_credits" in step:
+                if not isinstance(step["reward_credits"], int) or step["reward_credits"] <= 0:
+                    raise ValueError(
+                        f"{filepath.name}: step {idx} 'reward_credits' must be a positive integer"
+                    )
+
     def load_quest(self, quest: Dict[str, Any]) -> None:
         """Load a single quest into Supabase (upsert by code).
 
@@ -132,6 +138,7 @@ class QuestLoader:
                 "unique_field": step.get("unique_field"),
                 "enabled": step.get("enabled", True),
                 "meta": step.get("meta", {}),
+                "reward_credits": step.get("reward_credits"),
             }
 
             step_result = (

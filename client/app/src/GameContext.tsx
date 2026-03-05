@@ -1386,12 +1386,16 @@ export function GameProvider({ children }: GameProviderProps) {
                   questName: data.quest_name,
                   completedStepName: data.step_name,
                   nextStep: data.next_step,
+                  reward: data.reward,
                 })
                 useGameStore.getState().setNotifications({ questCompleted: true })
               }
               useGameStore.getState().addActivityLogEntry({
                 type: "quest.step_completed",
-                message: `[${data.quest_name}] Step completed: ${data.step_name}`,
+                message:
+                  data.reward?.credits ?
+                    `[${data.quest_name}] Step completed: ${data.step_name} (+${data.reward.credits} credits)`
+                  : `[${data.quest_name}] Step completed: ${data.step_name}`,
               })
               break
             }
@@ -1403,12 +1407,16 @@ export function GameProvider({ children }: GameProviderProps) {
                 type: "quest",
                 completedQuestName: data.quest_name,
                 snapshotQuestIds: [],
+                reward: data.reward,
               })
               useGameStore.getState().completeQuest(data.quest_id)
               useGameStore.getState().setNotifications({ questCompleted: true })
               useGameStore.getState().addActivityLogEntry({
                 type: "quest.completed",
-                message: `Quest completed: ${data.quest_name}`,
+                message:
+                  data.reward?.credits ?
+                    `Quest completed: ${data.quest_name} (+${data.reward.credits} credits)`
+                  : `Quest completed: ${data.quest_name}`,
               })
               break
             }
