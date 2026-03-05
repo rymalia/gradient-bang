@@ -26,11 +26,13 @@ export const MicDeviceSelect = ({
         </SelectValue>
       </SelectTrigger>
       <SelectContent>
-        {availableMics?.map((mic) => (
-          <SelectItem key={mic.deviceId} value={mic.deviceId}>
-            {mic.label || `Device ${mic.deviceId.slice(0, 5)}`}
-          </SelectItem>
-        ))}
+        {availableMics
+          ?.filter((mic) => mic.deviceId)
+          .map((mic) => (
+            <SelectItem key={mic.deviceId} value={mic.deviceId}>
+              {mic.label || `Device ${mic.deviceId.slice(0, 5)}`}
+            </SelectItem>
+          ))}
       </SelectContent>
     </Select>
   )
@@ -52,11 +54,13 @@ export const SpeakerDeviceSelect = ({
         </SelectValue>
       </SelectTrigger>
       <SelectContent>
-        {availableSpeakers?.map((speaker) => (
-          <SelectItem key={speaker.deviceId} value={speaker.deviceId}>
-            {speaker.label || `Device ${speaker.deviceId.slice(0, 5)}`}
-          </SelectItem>
-        ))}
+        {availableSpeakers
+          ?.filter((speaker) => speaker.deviceId)
+          .map((speaker) => (
+            <SelectItem key={speaker.deviceId} value={speaker.deviceId}>
+              {speaker.label || `Device ${speaker.deviceId.slice(0, 5)}`}
+            </SelectItem>
+          ))}
       </SelectContent>
     </Select>
   )
