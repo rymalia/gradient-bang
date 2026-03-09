@@ -1,6 +1,5 @@
 import { FunctionCallContent } from "@/components/conversation/FunctionCallContent"
 import { MessageContent } from "@/components/conversation/MessageContent"
-import { MessageRole } from "@/components/conversation/MessageRole"
 import { cn } from "@/utils/tailwind"
 
 import type {
@@ -64,27 +63,22 @@ export const MessageContainer = ({
       <div className={cn("flex flex-col gap-2")}>
         <FunctionCallContent
           functionCall={message.functionCall}
+          createdAt={message.createdAt}
           functionCallLabel={functionCallLabel}
           functionCallRenderer={functionCallRenderer}
         />
-        <div className={cn("self-end text-xs text-gray-500 mb-1")}>
-          {new Date(message.createdAt).toLocaleTimeString()}
-        </div>
       </div>
     )
   }
 
   return (
     <div className={cn("flex flex-col gap-2")}>
-      <MessageRole
+      <MessageContent
+        message={message}
         assistantLabel={assistantLabel}
         clientLabel={clientLabel}
         systemLabel={systemLabel}
         functionCallLabel={functionCallLabel}
-        role={message.role}
-      />
-      <MessageContent
-        message={message}
         botOutputRenderers={botOutputRenderers}
         aggregationMetadata={aggregationMetadata}
       />

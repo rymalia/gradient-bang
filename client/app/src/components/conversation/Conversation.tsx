@@ -1,11 +1,16 @@
-import { memo, useMemo } from "react"
+import { memo, useEffect, useMemo, useState } from "react"
 
+import { AnimatePresence, motion } from "motion/react"
 import { PlugsIcon } from "@phosphor-icons/react/dist/icons/Plugs"
 
 import { Card, CardContent } from "@/components/primitives/Card"
 import { ScrollArea } from "@/components/primitives/ScrollArea"
+import { ToggleControl } from "@/components/primitives/ToggleControl"
+import { ShipOSDVisualizer } from "@/components/ShipOSDVisualizer"
 import { usePipecatConnectionState } from "@/hooks/usePipecatConnectionState"
 import { usePipecatConversation } from "@/hooks/usePipecatConversation"
+import useAudioStore from "@/stores/audio"
+import { useConversationStore } from "@/stores/conversation"
 
 import { MessageContainer } from "./MessageContainer"
 
@@ -35,12 +40,6 @@ export interface ConversationProps {
    * @default false
    */
   noAutoscroll?: boolean
-  /**
-   * Display messages in reverse order (newest first)
-   * When enabled, new messages appear at the top and auto-scroll targets the top
-   * @default false
-   */
-  reverseOrder?: boolean
   /**
    * Custom label for assistant messages
    * @default "assistant"
@@ -138,25 +137,42 @@ export const Conversation: React.FC<ConversationProps> = memo(
     assistantLabel,
     clientLabel,
     noFunctionCalls = false,
-    reverseOrder = false,
     systemLabel,
     functionCallLabel,
     functionCallRenderer,
     botOutputRenderers,
     aggregationMetadata,
   }) => {
+    const [showSystem, setShowSystem] = useState(false)
+    const llmIsWorking = useConversationStore((state) => state.isThinking)
+
     const { isConnected } = usePipecatConnectionState()
 
     const { messages: allMessages } = usePipecatConversation({
       aggregationMetadata,
     })
 
+    useEffect(() => {
+      if (llmIsWorking) {
+        useAudioStore.getState().playSound("chime7", { volume: 0.25 })
+      }
+    }, [llmIsWorking])
+
     const messages = useMemo(
-      () => (noFunctionCalls ? allMessages.filter((m) => m.role !== "function_call") : allMessages),
-      [allMessages, noFunctionCalls]
+      () =>
+        allMessages
+          .filter((m) => {
+            if (noFunctionCalls && m.role === "function_call") return false
+            if (!showSystem && m.role === "system") return false
+            return true
+          })
+          .reverse(),
+      [allMessages, noFunctionCalls, showSystem]
     )
 
-    const panelActive = isConnected || (messages?.length ?? 0) > 0
+    const messageCount = useMemo(() => allMessages.length, [allMessages])
+
+    const panelActive = isConnected || messageCount > 0
 
     return (
       <Card
@@ -174,25 +190,72 @@ export const Conversation: React.FC<ConversationProps> = memo(
               <PlugsIcon weight="thin" size={72} className="animate-pulse" />
             </div>
           </CardContent>
-        : <CardContent className="absolute inset-0 min-h-0  mask-[linear-gradient(to_bottom,black_60%,transparent_100%)]">
-            <ScrollArea className="relative w-full h-full pointer-events-auto">
-              <div className="flex flex-col gap-2 pb-20">
-                {(reverseOrder ? [...messages].reverse() : messages).map((message, index) => (
-                  <MessageContainer
-                    key={index}
-                    message={message}
-                    assistantLabel={assistantLabel}
-                    clientLabel={clientLabel}
-                    systemLabel={systemLabel}
-                    functionCallLabel={functionCallLabel}
-                    functionCallRenderer={functionCallRenderer}
-                    botOutputRenderers={botOutputRenderers}
-                    aggregationMetadata={aggregationMetadata}
+        : <>
+            <div className="absolute right-ui-sm bottom-ui-sm group-hover:bg-background/60 w-fit h-fit inline-flex items-center gap-ui-xs px-ui-xxs py-ui-xxs z-20 opacity-50 group-hover:opacity-100 transition-opacity">
+              <span className="text-xxs uppercase text-foreground px-ui-xxs opacity-0 group-hover:opacity-100 transition-opacity">
+                Show system
+              </span>
+              <ToggleControl size="sm" checked={showSystem} onCheckedChange={setShowSystem} />
+            </div>
+            <div className="relative flex-1 mb-0 text-foreground">
+              <div className="absolute bottom-0 inset-x-0 h-15 z-10 pointer-events-none pl-ui-xs">
+                <div className="relative inline-block">
+                  <ShipOSDVisualizer
+                    barLineCap="square"
+                    participantType="bot"
+                    barColor="white"
+                    peakLineColor="--color-terminal"
+                    peakLineThickness={2}
+                    peakOffset={6}
+                    barMaxHeight={60}
+                    barCount={12}
+                    barWidth={4}
+                    barGap={8}
+                    barOrigin="bottom"
+                    isThinking={llmIsWorking}
+                    thinkingSpeed={4}
+                    thinkingMaxHeight={15}
+                    className={llmIsWorking ? "opacity-40" : "opacity-100"}
                   />
-                ))}
+                  <AnimatePresence>
+                    {llmIsWorking && (
+                      <motion.div
+                        key="thinking-badge"
+                        initial={{ y: 20, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        exit={{ y: 20, opacity: 0 }}
+                        transition={{ duration: 0.2, ease: "easeOut" }}
+                        className="absolute bottom-ui-xs inset-x-0 flex flex-col items-center justify-center"
+                      >
+                        <div className="px-2 py-1 bg-terminal-background/80 elbow elbow-1 elbow-offset-0 elbow-size-6 elbow-terminal text-terminal-foreground text-xs uppercase animate-pulse">
+                          Thinking
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
               </div>
-            </ScrollArea>
-          </CardContent>
+              <CardContent className="absolute inset-0 min-h-0  mask-[linear-gradient(to_bottom,black_60%,transparent_100%)]">
+                <ScrollArea className="relative w-full h-full pointer-events-auto">
+                  <div className="flex flex-col gap-2 pb-20">
+                    {messages.map((message, index) => (
+                      <MessageContainer
+                        key={index}
+                        message={message}
+                        assistantLabel={assistantLabel}
+                        clientLabel={clientLabel}
+                        systemLabel={systemLabel}
+                        functionCallLabel={functionCallLabel}
+                        functionCallRenderer={functionCallRenderer}
+                        botOutputRenderers={botOutputRenderers}
+                        aggregationMetadata={aggregationMetadata}
+                      />
+                    ))}
+                  </div>
+                </ScrollArea>
+              </CardContent>
+            </div>
+          </>
         }
       </Card>
     )

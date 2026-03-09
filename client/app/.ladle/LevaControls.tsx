@@ -4,6 +4,7 @@ import { button, buttonGroup, folder, Leva, useControls } from "leva"
 import { faker } from "@faker-js/faker"
 import { PipecatClient } from "@pipecat-ai/client-js"
 
+import { useConversationStore } from "@/stores/conversation"
 import useGameStore from "@/stores/game"
 
 import { useCombatControls } from "./combat/useCombatControls"
@@ -128,7 +129,7 @@ export const LevaControls = ({
     Conversation: folder(
       {
         ["Add System Message"]: button(() => {
-          addChatMessage({
+          useConversationStore.getState().addMessage({
             role: "system",
             parts: [
               {
@@ -144,12 +145,10 @@ export const LevaControls = ({
           state.addToolCallMessage(INCOMING_CHAT_TOOL_CALL_MOCK.name)
         }),
         ["Set LLM Is Working"]: button(() => {
-          const state = useGameStore.getState()
-          state.setLLMIsWorking(true)
+          useConversationStore.getState().setIsThinking(true)
         }),
         ["Set LLM Is Not Working"]: button(() => {
-          const state = useGameStore.getState()
-          state.setLLMIsWorking(false)
+          useConversationStore.getState().setIsThinking(false)
         }),
       },
       { collapsed: true }

@@ -1,6 +1,12 @@
 import { useState } from "react"
 
-import { ArrowRightIcon, CheckIcon, CircleNotchIcon, XIcon } from "@phosphor-icons/react"
+import {
+  ArrowRightIcon,
+  CheckIcon,
+  CircleNotchIcon,
+  WrenchIcon,
+  XIcon,
+} from "@phosphor-icons/react"
 
 import {
   Collapsible,
@@ -9,10 +15,14 @@ import {
 } from "@/components/primitives/Collapsible"
 import { cn } from "@/utils/tailwind"
 
+import { MessageTimestamp } from "./MessageTimestamp"
+
 import type { FunctionCallData, FunctionCallRenderer } from "@/types/conversation"
 
 interface FunctionCallContentProps {
   functionCall: FunctionCallData
+  /** Timestamp for the function call message */
+  createdAt?: string | number
   /** Label for function call entries */
   functionCallLabel?: string
   /** Custom renderer for function call messages. When provided, replaces the default rendering. */
@@ -40,6 +50,7 @@ const StatusIcon: React.FC<{
 
 export const FunctionCallContent: React.FC<FunctionCallContentProps> = ({
   functionCall,
+  createdAt,
   functionCallLabel = "Function call",
   functionCallRenderer,
   classNames = {},
@@ -60,23 +71,26 @@ export const FunctionCallContent: React.FC<FunctionCallContentProps> = ({
         <CollapsibleTrigger asChild disabled={!hasDetails}>
           <button
             className={cn(
-              "flex items-center gap-2 text-xs font-mono",
-              "text-muted-foreground transition-colors",
+              "text-subtle-foreground font-extrabold text-xxs uppercase inline-flex gap-1 items-center",
+              "transition-colors select-none",
               hasDetails && "hover:text-foreground cursor-pointer",
-              !hasDetails && "cursor-default",
-              "select-none"
+              !hasDetails && "cursor-default"
             )}
           >
-            {hasDetails && (
-              <ArrowRightIcon
-                size={14}
-                className={cn("transition-transform duration-200", isOpen && "rotate-90")}
-              />
+            {createdAt && (
+              <MessageTimestamp createdAt={createdAt} className="text-accent-foreground" />
             )}
             <StatusIcon status={functionCall.status} cancelled={functionCall.cancelled} />
-            <span className="font-semibold">{functionCallLabel}</span>
+            <WrenchIcon weight="fill" size={11} className="size-2.75" />
+            <span>{functionCallLabel}</span>
             {functionCall.function_name && (
-              <span className="text-muted-foreground">({functionCall.function_name})</span>
+              <span className="font-bold text-medium">({functionCall.function_name})</span>
+            )}
+            {hasDetails && (
+              <ArrowRightIcon
+                size={11}
+                className={cn("transition-transform duration-200", isOpen && "rotate-90")}
+              />
             )}
           </button>
         </CollapsibleTrigger>

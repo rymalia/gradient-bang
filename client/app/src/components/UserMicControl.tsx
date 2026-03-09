@@ -72,7 +72,7 @@ export const UserMicControl: React.FC<PipecatClientMicToggleProps> = ({
         disabled={disabled || initializing || isRemoteMuted}
         loader="icon"
         isLoading={initializing && !disabled}
-        className={cn("flex flex-row gap-2 items-center shrink-0", className)}
+        className={cn("flex flex-row gap-2 items-center shrink-0 min-w-32", className)}
       >
         {(() => {
           if (disabled) return <MicrophoneSlashIcon weight="bold" />

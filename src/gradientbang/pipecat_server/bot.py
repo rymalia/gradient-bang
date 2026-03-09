@@ -5,7 +5,6 @@ from datetime import datetime, timedelta, timezone
 
 from dotenv import load_dotenv
 from loguru import logger
-from gradientbang.pipecat_server.s3_smart_turn import S3SmartTurnAnalyzerV3
 from pipecat.audio.vad.silero import SileroVADAnalyzer
 from pipecat.frames.frames import (
     BotSpeakingFrame,
@@ -51,6 +50,7 @@ from pipecat.turns.user_stop import TurnAnalyzerUserTurnStopStrategy
 from pipecat.turns.user_turn_strategies import UserTurnStrategies
 from pipecat.utils.time import time_now_iso8601
 
+from gradientbang.pipecat_server.s3_smart_turn import S3SmartTurnAnalyzerV3
 from gradientbang.utils.llm_factory import (
     create_llm_service,
     get_ui_agent_llm_config,
@@ -88,6 +88,7 @@ init_weave()
 
 if os.getenv("BOT_USE_KRISP"):
     from pipecat.audio.filters.krisp_viva_filter import KrispVivaFilter
+
 
 # Log filter — applied in _configure_logging() which runs inside bot() so it
 # takes effect after pipecat's runner has set up its own loguru handlers.
@@ -189,9 +190,13 @@ async def _startup_init_local_api() -> tuple[LocalApiServer, str]:
 
 
 @traced
-async def _startup_resolve_character(character_id_hint: str | None, character_name_hint: str | None, server_url: str):
+async def _startup_resolve_character(
+    character_id_hint: str | None, character_name_hint: str | None, server_url: str
+):
     """Resolve character identity (traced span)."""
-    return await _resolve_character_identity(character_id_hint, server_url, character_name_hint=character_name_hint)
+    return await _resolve_character_identity(
+        character_id_hint, server_url, character_name_hint=character_name_hint
+    )
 
 
 @traced
@@ -219,7 +224,9 @@ async def _startup_init_llm(task_manager: "VoiceTaskManager"):
 
 
 @traced
-async def bot_startup(character_id_hint: str | None, character_name_hint: str | None, server_url: str):
+async def bot_startup(
+    character_id_hint: str | None, character_name_hint: str | None, server_url: str
+):
     """Traced startup wrapper — initializes all services for the bot pipeline."""
 
     rtvi = RTVIProcessor()
@@ -247,12 +254,10 @@ async def bot_startup(character_id_hint: str | None, character_name_hint: str | 
         )
         return local_api_server, character_id, character_display_name
 
-    (local_api_server, character_id, character_display_name), stt, tts = (
-        await asyncio.gather(
-            _chain_a(),
-            _startup_init_stt(),
-            _startup_init_tts(),
-        )
+    (local_api_server, character_id, character_display_name), stt, tts = await asyncio.gather(
+        _chain_a(),
+        _startup_init_stt(),
+        _startup_init_tts(),
     )
 
     logger.info(
@@ -285,9 +290,14 @@ async def run_bot(transport, runner_args: RunnerArguments, **kwargs):
     character_name_hint = body.get("character_name")
 
     (
-        rtvi, local_api_server,
-        character_id, character_display_name,
-        task_manager, stt, tts, llm,
+        rtvi,
+        local_api_server,
+        character_id,
+        character_display_name,
+        task_manager,
+        stt,
+        tts,
+        llm,
     ) = await bot_startup(character_id_hint, character_name_hint, server_url)
 
     @llm.event_handler("on_function_calls_started")
@@ -433,8 +443,8 @@ async def run_bot(transport, runner_args: RunnerArguments, **kwargs):
                     token_usage_metrics,
                     say_text_voice_guard,
                     tts,
-                    assistant_aggregator,
                     output_transport,
+                    assistant_aggregator,
                     compression_consumer,  # Receives compression results
                 ],
                 # Compression monitoring branch (sink)
@@ -904,9 +914,7 @@ async def run_bot(transport, runner_args: RunnerArguments, **kwargs):
                 )
             except Exception as exc:
                 logger.error(f"combat-action failed: {exc}")
-                await rtvi.send_server_message(
-                    {"frame_type": "error", "error": str(exc)}
-                )
+                await rtvi.send_server_message({"frame_type": "error", "error": str(exc)})
             return
 
         # Handle say-text: generate TTS with an optional temporary voice

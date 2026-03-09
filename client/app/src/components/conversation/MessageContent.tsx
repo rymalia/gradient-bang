@@ -3,6 +3,8 @@ import { Fragment } from "react"
 import { isMessageEmpty } from "@/stores/conversation"
 import { cn } from "@/utils/tailwind"
 
+import { MessageRole } from "./MessageRole"
+import { MessageTimestamp } from "./MessageTimestamp"
 import Thinking from "./Thinking.tsx"
 
 import {
@@ -39,6 +41,26 @@ interface Props {
    * The message to display
    */
   message: ConversationMessage
+  /**
+   * Custom label for assistant messages
+   * @default "assistant"
+   */
+  assistantLabel?: string
+  /**
+   * Custom label for user/client messages
+   * @default "user"
+   */
+  clientLabel?: string
+  /**
+   * Custom label for system messages
+   * @default "system"
+   */
+  systemLabel?: string
+  /**
+   * Custom label for function call entries
+   * @default "function call"
+   */
+  functionCallLabel?: string
   /**
    * Custom renderers for BotOutput content based on aggregation type
    * Key is the aggregation type (e.g., "code", "link"), value is a renderer function
@@ -80,7 +102,7 @@ const renderBotOutput = (
   return (
     <Wrapper>
       {spoken}
-      {unspoken && <span className="text-muted-foreground">{unspoken}</span>}
+      {unspoken && <span className="text-accent-foreground">{unspoken}</span>}
     </Wrapper>
   )
 }
@@ -112,6 +134,10 @@ export const MessageContent = ({
   aggregationMetadata,
   classNames = {},
   message,
+  assistantLabel,
+  clientLabel,
+  systemLabel,
+  functionCallLabel,
 }: Props) => {
   const parts = Array.isArray(message.parts) ? message.parts : []
 
@@ -147,43 +173,65 @@ export const MessageContent = ({
   }
 
   return (
-    <div className={cn("flex flex-col gap-2", classNames.messageContent)}>
-      {groupedParts.map((group, groupIdx) => {
-        if (group.type === "inline") {
-          // Render inline parts together in a single line
-          return (
-            <div key={groupIdx} className="inline-block">
-              {group.parts.map((part, partIdx) => {
-                const content = renderPartContent(part, botOutputRenderers, aggregationMetadata)
-                const shouldAddSpace = partIdx > 0 && !isBotOutputText(part)
+    <div
+      className={cn(
+        "flex flex-col gap-0 text-xxs text-foreground pr-ui-xs",
+        classNames.messageContent
+      )}
+    >
+      <div
+        className={cn(
+          "font-extrabold text-xxs uppercase",
+          message.role === "assistant" ? "text-terminal"
+          : message.role === "user" ? "text-fuel"
+          : "text-warning",
+          classNames.time
+        )}
+      >
+        <MessageTimestamp createdAt={message.createdAt} />{" "}
+        <MessageRole
+          assistantLabel={assistantLabel}
+          clientLabel={clientLabel}
+          systemLabel={systemLabel}
+          functionCallLabel={functionCallLabel}
+          role={message.role}
+          className="inline font-extrabold text-xxs text-inherit"
+        />
+        :
+      </div>
+      <div className="flex-1 normal-case tracking-normal text-pretty">
+        {groupedParts.map((group, groupIdx) => {
+          if (group.type === "inline") {
+            return (
+              <Fragment key={groupIdx}>
+                {group.parts.map((part, partIdx) => {
+                  const content = renderPartContent(part, botOutputRenderers, aggregationMetadata)
+                  const shouldAddSpace = partIdx > 0 && !isBotOutputText(part)
 
-                return (
+                  return (
+                    <Fragment key={partIdx}>
+                      {shouldAddSpace && " "}
+                      {content}
+                    </Fragment>
+                  )
+                })}
+              </Fragment>
+            )
+          } else {
+            return (
+              <Fragment key={groupIdx}>
+                {group.parts.map((part, partIdx) => (
                   <Fragment key={partIdx}>
-                    {shouldAddSpace && " "}
-                    {content}
+                    {renderPartContent(part, botOutputRenderers, aggregationMetadata)}
                   </Fragment>
-                )
-              })}
-            </div>
-          )
-        } else {
-          // Render block parts separately (each on its own line)
-          return (
-            <Fragment key={groupIdx}>
-              {group.parts.map((part, partIdx) => (
-                <Fragment key={partIdx}>
-                  {renderPartContent(part, botOutputRenderers, aggregationMetadata)}
-                </Fragment>
-              ))}
-            </Fragment>
-          )
-        }
-      })}
-      {isMessageEmpty(message) ?
-        <Thinking className={classNames.thinking} />
-      : null}
-      <div className={cn("self-end text-xs text-gray-500 mb-1", classNames.time)}>
-        {new Date(message.createdAt).toLocaleTimeString()}
+                ))}
+              </Fragment>
+            )
+          }
+        })}
+        {isMessageEmpty(message) ?
+          <Thinking className={cn("opacity-50 animate-pulse", classNames.thinking)} />
+        : null}
       </div>
     </div>
   )
