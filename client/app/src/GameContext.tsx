@@ -1472,7 +1472,6 @@ export function GameProvider({ children }: GameProviderProps) {
 
             case "ui-action": {
               const uiPayload = e.payload as Record<string, unknown>
-              console.log("pew", uiPayload)
               if (uiPayload?.["ui-action"] === "control_ui") {
                 console.debug("[GAME EVENT] UI action control_ui", uiPayload)
 
