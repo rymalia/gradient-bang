@@ -21,7 +21,7 @@ If the event path is already visible in the pending events block, use `control_u
 ## `control_ui` guidance
 
 - Combine all fields in a single `control_ui` call (don't make separate calls for show_panel, highlight, and fit).
-- `show_panel: "default"` closes/dismisses the map panel, or highlight and switch sidebar panel: "sector" (current sector info and ships), "player" (current player info) ,"trade" (port info and trade history), "task_history" (task history and summaries),"contracts" (player contracts and progress), "logs" (chat and messages)
+- `show_panel: "default"` toggles between map or task view, or highlight and switch sidebar panel: "sector" (current sector info and ships), "player" (current player info) ,"trade" (port info and trade history), "task_history" (history and task summaries),"contracts" (player contracts and progress), "logs" (chat and messages)
 - `map_center_sector`: centers the map on one sector at the current zoom. Use for single-sector focus ("show me sector 220").
 - `map_fit_sectors`: auto-adjusts zoom so all listed sectors are visible. Use when showing multiple locations (ships, route endpoints).
 - `map_highlight_path` + `map_fit_sectors`: use together for route display — highlight draws the line, fit_sectors zooms to show it.
@@ -34,6 +34,10 @@ User: "Show our location and the closest unexplored region."
 If a recent `map.region` event lists nearest unvisited sectors, treat this as a UI request and call:
 → `control_ui(show_panel="map", map_fit_sectors=[<player_sector>, <nearest_unvisited_1>, <nearest_unvisited_2>])`
 Include the player sector because the user said "our location."
+
+Tasks example - user wants to see the task activity view:
+User: "Show me active tasks"
+→ `control_ui(show_panel="default")`
 
 Show panel example - user wants to see a particular sidebar panel:
 User: "Show me sector info."
