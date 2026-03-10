@@ -1334,6 +1334,28 @@ class AsyncGameClient:
         }
         return await self._request("corporation.kick", payload)
 
+    async def rename_corporation(
+        self,
+        *,
+        name: str,
+        character_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Rename the current corporation."""
+
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError("name must be a non-empty string")
+
+        if character_id is None:
+            character_id = self._character_id
+        if character_id != self._character_id:
+            raise ValueError(
+                f"AsyncGameClient is bound to character_id {self._character_id!r}; "
+                f"received {character_id!r}"
+            )
+
+        payload: Dict[str, Any] = {"character_id": character_id, "name": name}
+        return await self._request("corporation.rename", payload)
+
     async def list_corporations(self) -> List[Dict[str, Any]]:
         """Return summaries of all corporations."""
 

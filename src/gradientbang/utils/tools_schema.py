@@ -930,6 +930,32 @@ class KickCorporationMember(GameClientTool):
         )
 
 
+class RenameCorporation(GameClientTool):
+    def __call__(self, name, character_id=None):
+        payload = {"name": name}
+        if character_id is not None:
+            payload["character_id"] = character_id
+        else:
+            payload["character_id"] = self.game_client.character_id
+        return self.game_client.rename_corporation(**payload)
+
+    @classmethod
+    def schema(cls):
+        return FunctionSchema(
+            name="rename_corporation",
+            description="Rename your current corporation. Name must be 3-50 characters and unique.",
+            properties={
+                "name": {
+                    "type": "string",
+                    "description": "The new name for the corporation (3-50 characters)",
+                    "minLength": 3,
+                    "maxLength": 50,
+                },
+            },
+            required=["name"],
+        )
+
+
 class ShipDefinitions(GameClientTool):
     async def __call__(self):
         result = await self.game_client.get_ship_definitions()

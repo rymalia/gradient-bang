@@ -97,6 +97,7 @@ from gradientbang.utils.tools_schema import (
     JoinCorporation,
     KickCorporationMember,
     LeaveCorporation,
+    RenameCorporation,
     ListKnownPorts,
     LoadGameInfo,
     LocalMapRegion,
@@ -169,6 +170,7 @@ ASYNC_TOOL_COMPLETIONS = {
     "join_corporation": "corporation.member_joined",
     "leave_corporation": "corporation.member_left",
     "kick_corporation_member": "corporation.member_kicked",
+    "rename_corporation": "corporation.data",
     "combat_initiate": "combat.round_waiting",
     "combat_action": "combat.action_accepted",
 }
@@ -343,6 +345,7 @@ class TaskAgent:
             JoinCorporation,
             LeaveCorporation,
             KickCorporationMember,
+            RenameCorporation,
             SellShip,
             BankWithdraw,
         ]

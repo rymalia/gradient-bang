@@ -3,6 +3,7 @@ import React, { memo, useEffect, useMemo } from "react"
 import type { GlobalProvider, Meta } from "@ladle/react"
 import { PipecatClient } from "@pipecat-ai/client-js"
 import { PipecatClientProvider } from "@pipecat-ai/client-react"
+import { DailyTransport } from "@pipecat-ai/daily-transport"
 import { SmallWebRTCTransport } from "@pipecat-ai/small-webrtc-transport"
 
 import Error from "@/components/views/Error"
@@ -64,7 +65,10 @@ export const Provider: GlobalProvider = memo(({ children, storyMeta }) => {
   useEffect(() => {
     if (!client) {
       const client = new PipecatClient({
-        transport: new SmallWebRTCTransport(),
+        transport:
+          import.meta.env.VITE_PIPECAT_TRANSPORT === "small-webrtc" ?
+            new SmallWebRTCTransport()
+          : new DailyTransport(),
         ...clientOptions,
       })
       setClient(client)

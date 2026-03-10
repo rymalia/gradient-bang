@@ -177,6 +177,7 @@ class VoiceTaskManager:
             "corporation.member_left",
             "corporation.member_kicked",
             "corporation.disbanded",
+            "corporation.data",
             "chat.message",
             "error",
             # Client history query events (relayed via event system)

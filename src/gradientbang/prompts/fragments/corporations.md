@@ -11,6 +11,7 @@ Corporations allow players to work together, share resources, and operate corpor
 - Do NOT call `leave_corporation` unless the pilot specifically says they want to leave
 - Do NOT call `create_corporation` unless the pilot specifically asks to create one
 - Do NOT call `kick_corporation_member` unless the pilot specifically asks to remove someone
+- Do NOT call `rename_corporation` unless the pilot specifically asks to rename
 
 Ship purchases, trading, and other game actions never require changing corporation membership. If a ship purchase fails, report the error — do not attempt to fix it by modifying corporations.
 
@@ -91,6 +92,12 @@ purchase_ship(
 
 - Draws from corporation bank credits
 - Can optionally seed initial ship credits
+
+## Renaming a Corporation
+
+Use `rename_corporation(name="...")` to rename your corporation.
+- Name must be 3-50 characters
+- Name must be unique (case-insensitive)
 
 ## Kicking Members
 
