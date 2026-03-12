@@ -9,6 +9,12 @@ import {
   type FunctionCallData,
 } from "@/types/conversation"
 
+const TURN_MARKER_REGEX = /[✓○◐]/g
+
+const stripTurnMarkers = (text: string): string => {
+  return text.replace(TURN_MARKER_REGEX, "")
+}
+
 interface ConversationState {
   messages: ConversationMessage[]
   messageCallbacks: Map<string, (message: ConversationMessage) => void>
@@ -419,6 +425,11 @@ export const useConversationStore = create<ConversationState>()((set, get) => ({
 
   updateAssistantBotOutput: (text, final, spoken, aggregatedBy) => {
     const now = new Date()
+
+    const filteredText = stripTurnMarkers(text)
+    // Skip if filtering removed all content
+    if (!filteredText) return
+
     set((state) => {
       const messages = [...state.messages]
       const botOutputMessageState = new Map(state.botOutputMessageState)

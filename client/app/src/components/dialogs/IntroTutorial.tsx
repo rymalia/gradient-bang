@@ -1,14 +1,33 @@
+import { useEffect, useRef, useState } from "react"
+
 import { Button } from "@/components/primitives/Button"
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/primitives/Card"
-import { Divider } from "@/components/primitives/Divider"
+import useAudioStore from "@/stores/audio"
 import useGameStore from "@/stores/game"
 
 import { BaseDialog } from "./BaseDialog"
 
+const TUTORIAL_VIDEO_URL =
+  "https://api.gradient-bang.com/storage/v1/object/public/GB%20Public/tutorial.mp4"
+
 export const IntroTutorial = ({ onContinue }: { onContinue: () => void }) => {
   const setActiveModal = useGameStore.use.setActiveModal()
+  const activeModal = useGameStore.use.activeModal?.()
+  const isOpen = activeModal?.modal === "intro_tutorial"
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const [hovered, setHovered] = useState(false)
+
+  useEffect(() => {
+    if (isOpen) {
+      useAudioStore.getState().fadeOut("theme", { duration: 1500 })
+    }
+  }, [isOpen])
 
   const handleSkip = () => {
+    setActiveModal(undefined)
+    onContinue()
+  }
+
+  const handleEnded = () => {
     setActiveModal(undefined)
     onContinue()
   }
@@ -17,36 +36,35 @@ export const IntroTutorial = ({ onContinue }: { onContinue: () => void }) => {
     <BaseDialog
       modalName="intro_tutorial"
       title="Welcome"
-      size="2xl"
+      size="full"
+      overlayVariant="none"
+      noPadding
       dismissOnClickOutside={false}
       showCloseButton={false}
+      contentClassName="h-screen z-[100]"
+      overlayClassName="z-[100]"
     >
-      <Card variant="stripes" size="default" className="w-full h-fit shadow-xlarge bg-background">
-        <CardHeader>
-          <CardTitle>Welcome to Gradient Bang</CardTitle>
-        </CardHeader>
-        <CardContent className="h-full min-h-0 text-sm flex flex-col gap-3">
-          <p>
-            This is the intro tutorial placeholder. Short 15 second intro video coming soon. For
-            now, just know that you&apos;re about to enter a universe where AI agents drive
-            everything.
-          </p>
-          <ul className="list-disc list-inside">
-            <li>Why we made this and relevance to Pipecat</li>
-            <li>Emphasis on audio and voice - enable your mic!</li>
-            <li>How to interact with the ship AI</li>
-          </ul>
-          <p>Good luck out there, pilot.</p>
-        </CardContent>
-        <CardFooter className="flex flex-col gap-6">
-          <Divider decoration="plus" color="accent" />
-          <div className="flex flex-row gap-3 w-full">
-            <Button variant="ghost" size="sm" onClick={handleSkip}>
-              Skip
-            </Button>
-          </div>
-        </CardFooter>
-      </Card>
+      <div
+        className="relative w-full h-full flex items-center justify-center bg-black"
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+      >
+        <video
+          ref={videoRef}
+          src={TUTORIAL_VIDEO_URL}
+          className="max-w-480 max-h-270 w-full h-full object-contain"
+          autoPlay
+          playsInline
+          preload="auto"
+          controls={hovered}
+          onEnded={handleEnded}
+        />
+        <div className="fixed top-ui-md right-ui-md z-10">
+          <Button variant="ghost" size="sm" onClick={handleSkip}>
+            Skip
+          </Button>
+        </div>
+      </div>
     </BaseDialog>
   )
 }
