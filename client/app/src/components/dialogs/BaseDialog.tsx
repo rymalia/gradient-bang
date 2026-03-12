@@ -45,6 +45,7 @@ export interface BaseDialogProps {
   size?: "sm" | "md" | "lg" | "xl" | "2xl" | "full" | string
   overlayVariant?: "dots" | "dotted" | "none"
   contentClassName?: string
+  overlayClassName?: string
   noPadding?: boolean
   playOpenSound?: boolean
   useDiamondFX?: boolean
@@ -63,6 +64,7 @@ export const BaseDialog = ({
   size = "lg",
   overlayVariant = "dots",
   contentClassName,
+  overlayClassName,
   noPadding = false,
   playOpenSound = true,
   useDiamondFX = false,
@@ -121,7 +123,8 @@ export const BaseDialog = ({
                   {...OVERLAY_ANIMATION}
                   className={cn(
                     "DialogOverlay z-[90] bg-muted/80 motion-safe:bg-muted/30 motion-safe:backdrop-blur-sm text-subtle",
-                    overlayVariantClass
+                    overlayVariantClass,
+                    overlayClassName
                   )}
                 />
               </Dialog.Overlay>
