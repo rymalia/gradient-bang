@@ -146,7 +146,7 @@ LIST_KNOWN_PORTS = FunctionSchema(
         },
         "max_hops": {
             "type": "integer",
-            "description": "Optional maximum distance (max 100). If omitted, server defaults are used (5 normally, 100 when mega=true).",
+            "description": "Maximum hop distance (max 100). Default is only 5 hops — use max_hops=100 when the user asks for all known ports or doesn't specify a range.",
             "minimum": 0,
             "maximum": 100,
         },

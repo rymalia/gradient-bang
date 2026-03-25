@@ -19,7 +19,11 @@ from typing import TYPE_CHECKING, Any, Dict, Optional
 
 from loguru import logger
 
-from pipecat.frames.frames import FunctionCallResultProperties, LLMMessagesAppendFrame
+from pipecat.frames.frames import (
+    FunctionCallResultProperties,
+    LLMMessagesAppendFrame,
+    LLMRunFrame,
+)
 from pipecat.processors.frameworks.rtvi import RTVIProcessor, RTVIServerMessageFrame
 from pipecat.services.llm_service import FunctionCallParams
 
@@ -109,13 +113,6 @@ class VoiceAgent(LLMAgent):
         voice_config = get_voice_llm_config()
         llm = create_llm_service(voice_config)
         logger.info("VoiceAgent: LLM created")
-        return llm
-
-    def build_tools(self) -> list:
-        return list(VOICE_TOOLS.standard_tools)
-
-    def create_llm(self) -> LLMService:
-        llm = self.build_llm()
         handlers = {
             "my_status": self._handle_my_status,
             "plot_course": self._handle_plot_course,
@@ -140,6 +137,9 @@ class VoiceAgent(LLMAgent):
             llm.register_function(schema.name, tracked)
         return llm
 
+    def build_tools(self) -> list:
+        return list(VOICE_TOOLS.standard_tools)
+
     # ══════════════════════════════════════════════════════════════════════
     # VOICE TOOLS — VoiceAgent executes these directly against the game
     # server. Request IDs are cached so EventRelay can link async game
@@ -160,6 +160,30 @@ class VoiceAgent(LLMAgent):
         await self.queue_frame_after_tools(
             LLMMessagesAppendFrame(messages=messages, run_llm=run_llm)
         )
+
+    # ── Deferred frame flush ──────────────────────────────────────────
+
+    async def _flush_deferred_frames(self) -> None:
+        """Flush deferred frames, coalescing multiple inference triggers.
+
+        When multiple events arrive while tools are in-flight, each gets
+        deferred with ``run_llm=True``. Without coalescing, Pipecat fires
+        N independent inferences on flush — each seeing the same user
+        question and repeating tool calls. We suppress all ``run_llm``
+        flags, flush the context, then send a single ``LLMRunFrame``.
+        """
+        needs_inference = any(
+            isinstance(f, LLMMessagesAppendFrame) and f.run_llm
+            for f in self._deferred_frames
+        )
+        for f in self._deferred_frames:
+            if isinstance(f, LLMMessagesAppendFrame) and f.run_llm:
+                f.run_llm = False
+
+        await super()._flush_deferred_frames()
+
+        if needs_inference:
+            await self.queue_frame(LLMRunFrame())
 
     # ── Request ID tracking ────────────────────────────────────────────
 

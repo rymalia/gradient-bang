@@ -55,11 +55,11 @@ class TestLLMSetup:
 
     @patch("gradientbang.pipecat_server.subagents.voice_agent.create_llm_service")
     @patch("gradientbang.pipecat_server.subagents.voice_agent.get_voice_llm_config")
-    def test_create_llm_registers_all_tools(self, _mock_config, mock_create):
+    def test_build_llm_registers_all_tools(self, _mock_config, mock_create):
         mock_llm = MagicMock()
         mock_create.return_value = mock_llm
         agent = _make_voice_agent()
-        agent.create_llm()
+        agent.build_llm()
         registered = {call.args[0] for call in mock_llm.register_function.call_args_list}
         assert registered == EXPECTED_TOOLS
 
@@ -185,7 +185,75 @@ class TestDeferredEventBatching:
         agent._tool_call_inflight = 0
         await agent._flush_deferred_frames()
         assert len(agent._deferred_frames) == 0
+        # 2 AppendFrames (run_llm suppressed) + 1 LLMRunFrame
+        assert agent.queue_frame.call_count == 3
+
+    async def test_flush_coalesces_run_llm(self):
+        """Multiple deferred run_llm=True frames produce a single LLMRunFrame."""
+        from pipecat.frames.frames import LLMMessagesAppendFrame, LLMRunFrame
+
+        agent = _make_voice_agent()
+        agent.queue_frame = AsyncMock()
+        agent._tool_call_inflight = 1
+
+        # Queue 3 frames with run_llm=True while tool is active
+        for content in ("event_a", "event_b", "event_c"):
+            await agent.queue_frame_after_tools(
+                LLMMessagesAppendFrame(
+                    messages=[{"role": "user", "content": content}], run_llm=True
+                )
+            )
+        assert len(agent._deferred_frames) == 3
+
+        agent._tool_call_inflight = 0
+        await agent._flush_deferred_frames()
+
+        # 3 AppendFrames (all run_llm=False) + 1 LLMRunFrame at the end
+        assert agent.queue_frame.call_count == 4
+        flushed = [call.args[0] for call in agent.queue_frame.call_args_list]
+        appends = [f for f in flushed if isinstance(f, LLMMessagesAppendFrame)]
+        runs = [f for f in flushed if isinstance(f, LLMRunFrame)]
+        assert all(f.run_llm is False for f in appends)
+        assert len(runs) == 1
+        # All messages preserved in order
+        assert [f.messages[0]["content"] for f in appends] == ["event_a", "event_b", "event_c"]
+
+    async def test_flush_single_frame_sends_run_frame(self):
+        """A single deferred frame with run_llm=True still produces an LLMRunFrame."""
+        from pipecat.frames.frames import LLMMessagesAppendFrame, LLMRunFrame
+
+        agent = _make_voice_agent()
+        agent.queue_frame = AsyncMock()
+        agent._tool_call_inflight = 1
+        await agent.queue_frame_after_tools(
+            LLMMessagesAppendFrame(messages=[{"role": "user", "content": "only"}], run_llm=True)
+        )
+        agent._tool_call_inflight = 0
+        await agent._flush_deferred_frames()
+
         assert agent.queue_frame.call_count == 2
+        flushed = [call.args[0] for call in agent.queue_frame.call_args_list]
+        assert isinstance(flushed[0], LLMMessagesAppendFrame)
+        assert flushed[0].run_llm is False
+        assert isinstance(flushed[1], LLMRunFrame)
+
+    async def test_flush_no_run_llm_skips_run_frame(self):
+        """Deferred frames with run_llm=False don't produce an LLMRunFrame."""
+        from pipecat.frames.frames import LLMMessagesAppendFrame, LLMRunFrame
+
+        agent = _make_voice_agent()
+        agent.queue_frame = AsyncMock()
+        agent._tool_call_inflight = 1
+        await agent.queue_frame_after_tools(
+            LLMMessagesAppendFrame(messages=[{"role": "user", "content": "a"}], run_llm=False)
+        )
+        agent._tool_call_inflight = 0
+        await agent._flush_deferred_frames()
+
+        assert agent.queue_frame.call_count == 1
+        flushed = [call.args[0] for call in agent.queue_frame.call_args_list]
+        assert isinstance(flushed[0], LLMMessagesAppendFrame)
+        assert not any(isinstance(f, LLMRunFrame) for f in flushed)
 
 
 # ── Task tool handlers ────────────────────────────────────────────────
