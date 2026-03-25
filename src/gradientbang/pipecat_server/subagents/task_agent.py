@@ -532,7 +532,7 @@ class TaskAgent(LLMAgent):
             await self._handle_finished_tool(params)
             return
 
-        self._step_counter += 1
+        self._emit_step()
         self._no_tool_nudge_count = 0
         self._consecutive_error_count = 0
         if self._no_tool_watchdog_handle:
@@ -952,6 +952,12 @@ class TaskAgent(LLMAgent):
                 asyncio.get_running_loop().create_task(_send())
             except RuntimeError:
                 pass  # No event loop
+
+    def _emit_step(self, label: Optional[str] = "") -> None:
+        self._step_counter += 1
+        label_suffix = f": {label}" if label else ""
+        step_text = f"{self._step_counter} - {self._elapsed_ms()} ms elapsed{label_suffix}"
+        self._output(step_text, TaskOutputType.STEP)
 
     def _elapsed_ms(self) -> int:
         if self._task_start_monotonic is None:

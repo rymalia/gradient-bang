@@ -7,12 +7,13 @@ Environment Variables:
     # Voice LLM (bot.py pipeline - typically no thinking mode)
     VOICE_LLM_PROVIDER: google, anthropic, openai (default: google)
     VOICE_LLM_MODEL: Model name (default: gemini-2.5-flash)
+    VOICE_LLM_THINKING_BUDGET: Token budget for thinking (default: 0)
     VOICE_LLM_FUNCTION_CALL_TIMEOUT_SECS: Tool call timeout in seconds (default: 20)
 
     # Task Agent LLM (TaskAgent - with thinking mode)
     TASK_LLM_PROVIDER: google, anthropic, openai (default: google)
     TASK_LLM_MODEL: Model name (default: gemini-2.5-flash)
-    TASK_LLM_THINKING_BUDGET: Token budget for thinking (default: 2048)
+    TASK_LLM_THINKING_BUDGET: Token budget for thinking (default: 16384)
     TASK_LLM_FUNCTION_CALL_TIMEOUT_SECS: Tool call timeout in seconds (default: 20)
 
     # UI Agent LLM (UI agent branch - lightweight, no thinking by default)
@@ -402,10 +403,11 @@ def get_voice_llm_config() -> LLMServiceConfig:
     Environment Variables:
         VOICE_LLM_PROVIDER: google, anthropic, openai (default: google)
         VOICE_LLM_MODEL: Model name (default: gemini-2.5-flash)
+        VOICE_LLM_THINKING_BUDGET: Token budget for thinking (default: 0)
         VOICE_LLM_FUNCTION_CALL_TIMEOUT_SECS: Tool call timeout in seconds (default: 20)
 
     Returns:
-        LLMServiceConfig for voice pipeline (no thinking enabled).
+        LLMServiceConfig for voice pipeline (thinking disabled by default).
     """
     provider_str = os.getenv("VOICE_LLM_PROVIDER", "google").lower()
     try:
@@ -423,6 +425,24 @@ def get_voice_llm_config() -> LLMServiceConfig:
 
     model = os.getenv("VOICE_LLM_MODEL", default_models[provider])
 
+    # Parse thinking budget
+    thinking_budget_str = os.getenv("VOICE_LLM_THINKING_BUDGET", "4096")
+    try:
+        thinking_budget = int(thinking_budget_str)
+    except ValueError:
+        logger.warning(
+            f"Invalid VOICE_LLM_THINKING_BUDGET '{thinking_budget_str}', using default 4096"
+        )
+        thinking_budget = 4096
+
+    thinking = None
+    if thinking_budget > 0:
+        thinking = UnifiedThinkingConfig(
+            enabled=True,
+            budget_tokens=thinking_budget,
+            include_thoughts=False,
+        )
+
     # Parse tool call timeout
     timeout_str = os.getenv("VOICE_LLM_FUNCTION_CALL_TIMEOUT_SECS", "20")
     try:
@@ -433,12 +453,15 @@ def get_voice_llm_config() -> LLMServiceConfig:
         )
         function_call_timeout_secs = 20.0
 
-    logger.info(f"Voice LLM config: provider={provider.value}, model={model}")
+    logger.info(
+        f"Voice LLM config: provider={provider.value}, model={model}, "
+        f"thinking_budget={thinking_budget}"
+    )
 
     return LLMServiceConfig(
         provider=provider,
         model=model,
-        thinking=None,  # Voice LLM typically doesn't use thinking mode
+        thinking=thinking,
         function_call_timeout_secs=function_call_timeout_secs,
     )
 
@@ -449,7 +472,7 @@ def get_task_agent_llm_config() -> LLMServiceConfig:
     Environment Variables:
         TASK_LLM_PROVIDER: google, anthropic, openai (default: google)
         TASK_LLM_MODEL: Model name (default: gemini-2.5-flash)
-        TASK_LLM_THINKING_BUDGET: Token budget for thinking (default: 2048)
+        TASK_LLM_THINKING_BUDGET: Token budget for thinking (default: 4096)
         TASK_LLM_FUNCTION_CALL_TIMEOUT_SECS: Tool call timeout in seconds (default: 20)
 
     Returns:
@@ -472,14 +495,14 @@ def get_task_agent_llm_config() -> LLMServiceConfig:
     model = os.getenv("TASK_LLM_MODEL", default_models[provider])
 
     # Parse thinking budget
-    thinking_budget_str = os.getenv("TASK_LLM_THINKING_BUDGET", "2048")
+    thinking_budget_str = os.getenv("TASK_LLM_THINKING_BUDGET", "4096")
     try:
         thinking_budget = int(thinking_budget_str)
     except ValueError:
         logger.warning(
-            f"Invalid TASK_LLM_THINKING_BUDGET '{thinking_budget_str}', using default 2048"
+            f"Invalid TASK_LLM_THINKING_BUDGET '{thinking_budget_str}', using default 4096"
         )
-        thinking_budget = 2048
+        thinking_budget = 4096
 
     thinking = UnifiedThinkingConfig(
         enabled=True,
@@ -517,10 +540,10 @@ def get_ui_agent_llm_config() -> LLMServiceConfig:
     Environment Variables:
         UI_AGENT_LLM_PROVIDER: google, anthropic, openai (default: google)
         UI_AGENT_LLM_MODEL: Model name (default: gemini-2.5-flash)
-        UI_AGENT_LLM_THINKING_BUDGET: Token budget for thinking (default: 0)
+        UI_AGENT_LLM_THINKING_BUDGET: Token budget for thinking (default: 4096)
 
     Returns:
-        LLMServiceConfig for UI agent (thinking disabled by default).
+        LLMServiceConfig for UI agent.
     """
     provider_str = os.getenv("UI_AGENT_LLM_PROVIDER", "google").lower()
     try:
@@ -538,12 +561,12 @@ def get_ui_agent_llm_config() -> LLMServiceConfig:
     }
     model = os.getenv("UI_AGENT_LLM_MODEL", default_models[provider])
 
-    thinking_budget_str = os.getenv("UI_AGENT_LLM_THINKING_BUDGET", "0")
+    thinking_budget_str = os.getenv("UI_AGENT_LLM_THINKING_BUDGET", "4096")
     try:
         thinking_budget = int(thinking_budget_str)
     except ValueError:
         logger.warning(
-            f"Invalid UI_AGENT_LLM_THINKING_BUDGET '{thinking_budget_str}', using default 0"
+            f"Invalid UI_AGENT_LLM_THINKING_BUDGET '{thinking_budget_str}', using default 4096"
         )
         thinking_budget = 0
 

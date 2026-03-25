@@ -48,8 +48,8 @@ venv.bak/
 .DS_Store
 
 # Deployment
-deployment/pcc-deploy.toml
-khk-notes.txt
+deployment/pcc-deploy*.toml
+!deployment/pcc-deploy.example.toml
 
 # Local runtime artifacts / large scratch trees
 bot.log.example
