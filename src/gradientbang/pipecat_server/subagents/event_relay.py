@@ -326,8 +326,11 @@ EVENT_CONFIGS: dict[str, EventConfig] = {
         voice_summary=_summarize_chat,
     ),
     "ship.renamed": EventConfig(inference=InferenceRule.ALWAYS, corp_scope_if_own_action=True),
-    "quest.step_completed": EventConfig(inference=InferenceRule.ALWAYS),
-    "quest.completed": EventConfig(inference=InferenceRule.ALWAYS),
+    # Voice-agent inference only — when a TaskAgent action completes a quest
+    # step, on_task_response already triggers inference with run_llm=True.
+    # Using ALWAYS here would double-fire (same pattern as task.finish).
+    "quest.step_completed": EventConfig(inference=InferenceRule.VOICE_AGENT),
+    "quest.completed": EventConfig(inference=InferenceRule.VOICE_AGENT),
     # Task-scoped allowlisted (direct events pass through when task-scoped)
     "trade.executed": EventConfig(task_scoped_allowlisted=True),
     "port.update": EventConfig(task_scoped_allowlisted=True),

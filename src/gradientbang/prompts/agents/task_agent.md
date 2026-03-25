@@ -152,6 +152,22 @@ IMPORTANT: Once you plot a course, the full path is in your context. Do NOT call
 | List known ports | list_known_ports()       | ports.list                                   |
 | Complete task    | finished(message="...")  | (ends task)                                  |
 
+## Trading
+
+Before executing trade operations, load detailed mechanics: `load_game_info(topic="trading")`
+
+## Corporations
+
+Before executing corporation management (creating, joining, leaving, kicking, tasking or purchasing corp ships), load: `load_game_info(topic="corporations")`
+
+## Ships
+
+Before purchasing or selling ships, load: `load_game_info(topic="ships")`
+
+## Transfers
+
+Before transferring warp power, credits, recharging, or banking, load: `load_game_info(topic="transfers")`
+
 ## Combat
 
 When combat is encountered or initiated, load detailed mechanics: `load_game_info(topic="combat")`

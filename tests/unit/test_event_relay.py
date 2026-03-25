@@ -1066,11 +1066,37 @@ class TestInferenceRules:
         assert run_llm is False
 
     async def test_always_triggers(self):
-        """InferenceRule.ALWAYS — run_llm is True."""
+        """InferenceRule.ALWAYS — run_llm is True (chat.message)."""
+        relay, task_state, _, _ = _make_relay()
+        event = _make_event(
+            "chat.message",
+            {"content": "hello", "__event_context": {"scope": "direct", "reason": "direct"}},
+        )
+        await relay._relay_event(event)
+        assert len(task_state.deferred_events) == 1
+        _, run_llm = task_state.deferred_events[0]
+        assert run_llm is True
+
+    async def test_quest_uses_voice_agent_inference(self):
+        """quest.step_completed uses VOICE_AGENT — no inference without request_id."""
         relay, task_state, _, _ = _make_relay()
         event = _make_event(
             "quest.step_completed",
             {"quest": "q1", "__event_context": {"scope": "direct", "reason": "direct"}},
+        )
+        await relay._relay_event(event)
+        assert len(task_state.deferred_events) == 1
+        _, run_llm = task_state.deferred_events[0]
+        assert run_llm is False
+
+    async def test_quest_triggers_with_voice_request_id(self):
+        """quest.step_completed triggers inference when voice agent request_id matches."""
+        relay, task_state, _, _ = _make_relay()
+        task_state.recent_request_ids.add("req-quest")
+        event = _make_event(
+            "quest.step_completed",
+            {"quest": "q1", "__event_context": {"scope": "direct", "reason": "direct"}},
+            request_id="req-quest",
         )
         await relay._relay_event(event)
         assert len(task_state.deferred_events) == 1
