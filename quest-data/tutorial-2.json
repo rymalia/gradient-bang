@@ -11,19 +11,17 @@
       "name": "Create or join a corporation",
       "description": "Form a new corporation or join an existing one.",
       "eval_type": "count",
-      "event_types": [
-        "corporation.created",
-        "corporation.member_joined"
-      ],
+      "event_types": ["corporation.created", "corporation.member_joined"],
       "target_value": 1,
       "reward_credits": 500,
       "meta": {
         "codec": {
-          "giver_id": "commander_voss",
-          "giver": "Voss, Commander",
+          "giver_id": "venture_chamber_agent",
+          "giver": "Veecy, Junior Recruitment Agent, the Venture Chamber",
           "pages": [
-            "Now that you've got a handle on trading and navigation, it's time to think bigger. Corporations are the backbone of power in this galaxy.",
-            "You can either create your own corporation or join an existing one. Either way, you'll gain access to shared resources, fleet ships, and the ability to coordinate with other players."
+            "Greetings from the Venture Chamber. You might not have heard of us, but we've been watching you for a while. We represent united business interests in the Federation and on many neutral worlds. One of our core tenets is that we want to prevent humanity from regressing into isolation again, so we try to encourage star pilots to think bigger. You may not have realized it yet, but corporations are the backbone of power in this galaxy.",
+            "You can either create your own corporation or join an existing one. Either way, you'll gain access to shared resources, fleet ships, and the ability to coordinate with other players.",
+            "So think about it, and go look at the options. We'll be in touch again when you have made your decision."
           ]
         }
       }
@@ -33,9 +31,7 @@
       "name": "Run a task on a corp ship",
       "description": "Purchase or select a corporation ship and execute a task on it.",
       "eval_type": "count_filtered",
-      "event_types": [
-        "task.start"
-      ],
+      "event_types": ["task.start"],
       "target_value": 1,
       "reward_credits": 1000,
       "payload_filter": {
@@ -43,11 +39,11 @@
       },
       "meta": {
         "codec": {
-          "giver": "Voss, Commander",
-          "giver_id": "commander_voss",
+          "giver_id": "venture_chamber_agent",
+          "giver": "Veecy, Junior Recruitment Agent, the Venture Chamber",
           "pages": [
             "Excellent! Now that you're part of a corporation, you can command fleet ships. Corporation ships operate independently from your personal vessel, allowing you to run tasks across multiple sectors simultaneously.",
-            "Purchase a corporation ship from any shipyard, then assign it a task. This is the key to scaling your operations and building real wealth in the galaxy."
+            "Purchase a corporation ship from any shipyard, then assign it a task. This is the key to scaling your operations and building real wealth in the galaxy. Maybe one day you'll even get to join the Venture Chamber as a junior partner."
           ]
         }
       }

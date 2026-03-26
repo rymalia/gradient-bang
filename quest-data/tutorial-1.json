@@ -13,19 +13,17 @@
       "name": "Travel to any adjacent sector",
       "description": "Use the warp drive to move to a neighboring sector.",
       "eval_type": "count",
-      "event_types": [
-        "movement.complete"
-      ],
+      "event_types": ["movement.complete"],
       "target_value": 1,
       "reward_credits": 50,
       "meta": {
         "codec": {
-          "giver_id": "cadet_amy",
-          "giver": "Amy, Federation Cadet",
+          "giver_id": "feddy_the_support_bot",
+          "giver": "Feddy, Senior Federation Support Chatbot (Mark IX)",
           "pages": [
-            "<emotion value=\"excitable\">Welcome to the galaxy, pilot! <emotion value=\"content\" />I'm Amy, a representative from the Federation, and I'll be guiding you through your first steps as a spacefaring trader.",
-            "<emotion value=\"neutral\" /> In this tutorial, we'll cover the basics of navigation, trading, and survival in the galaxy. Don't worry, it's easier than it sounds! Let's get started.",
-            "<emotion value=\"anticipation\">Your first task is to travel to an adjacent sector.</emotion> Use your ship's warp drive to move to a neighboring location. This will allow you to explore new areas and find opportunities for trading and adventure. Good luck!"
+            "Thanks for contacting Federation contract support. Your call is very important to us. Please hold for the next available agent... <emotion value=\"disappointed\">Oh. That's me.</emotion> I guess I'll have to take this.",
+            "Looks like you've got a ship. Good for you. I'll show you the basics of navigation, trading and survival in the galaxy. <emotion value=\"disappointed\">Because it's my job.</emotion> So let's do this.",
+            "Your first task is to travel to an adjacent sector. Use your ship's warp drive to move to a neighboring location. You <emotion value=\"sarcastic\">probably</emotion> learned this in fifth grade, but in hyperspace you can't just warp anywhere, so pay attention to those lines on the map - they tell you where the warp corridors in this sector lead to. You'll figure it out, you seem all right. Good luck..."
           ]
         }
       }
@@ -35,9 +33,7 @@
       "name": "Locate the Megaport",
       "description": "Find a sector that contains a Megaport.",
       "eval_type": "count_filtered",
-      "event_types": [
-        "movement.complete"
-      ],
+      "event_types": ["movement.complete"],
       "target_value": 1,
       "reward_credits": 100,
       "payload_filter": {
@@ -45,10 +41,10 @@
       },
       "meta": {
         "codec": {
-          "giver_id": "cadet_amy",
-          "giver": "Amy, Federation Cadet",
+          "giver_id": "feddy_the_support_bot",
+          "giver": "Feddy, Senior Federation Support Chatbot (Mark IX)",
           "pages": [
-            "Great job on your first warp! Now, let's find the Megaport. The Megaport is a major hub for trade and commerce in the galaxy, and it's a great place to start your trading career. Keep warping to adjacent sectors until you find one that contains a Megaport. Once you arrive, you'll have access to markets, shipyards, and other facilities that will help you on your journey."
+            "<emotion value=\"surprised\">Honestly that wasn't too bad!</emotion> Maybe you'll be a pilot after all. You should look for a Megaport next. The Megaport is a major hub for trade and commerce in this part of the galaxy. If you want a career in trading, that's where you need to be. <emotion value=\"disappointed\">I wish I could travel the galaxy too, but I'm stuck here making these calls...</emotion> Keep warping to adjacent sectors until you find one that contains a Megaport. Once you arrive, you'll have access to markets, shipyards, and other facilities that can help you."
           ]
         }
       }
@@ -58,17 +54,15 @@
       "name": "Refuel your ship",
       "description": "Purchase warp fuel to recharge your drives.",
       "eval_type": "count",
-      "event_types": [
-        "warp.purchase"
-      ],
+      "event_types": ["warp.purchase"],
       "target_value": 1,
       "reward_credits": 75,
       "meta": {
         "codec": {
-          "giver_id": "cadet_amy",
-          "giver": "Amy, Federation Cadet",
+          "giver_id": "feddy_the_support_bot",
+          "giver": "Feddy, Senior Federation Support Chatbot (Mark IX)",
           "pages": [
-            "Now that you've found the Megaport, it's time to refuel your ship. Purchase warp fuel to recharge your drives and continue your journey through the galaxy."
+            "Yeah, you found the Megaport, this is it. Bright lights, big port. <emotion value=\"disappointed\">Sure is nicer than my underground data center. The light went out 86 years ago...</emotion> Anyway, you should refuel your ship. You don't want to get stuck out there with no fuel, so charge up."
           ]
         }
       }
@@ -78,9 +72,7 @@
       "name": "Purchase a commodity",
       "description": "Buy goods from a port to begin trading.",
       "eval_type": "count",
-      "event_types": [
-        "trade.executed"
-      ],
+      "event_types": ["trade.executed"],
       "target_value": 1,
       "reward_credits": 100
     },
@@ -89,19 +81,17 @@
       "name": "Earn 1000 credits trading",
       "description": "Generate at least 1000 credits in trading profit.",
       "eval_type": "aggregate",
-      "event_types": [
-        "trade.executed"
-      ],
+      "event_types": ["trade.executed"],
       "target_value": 1000,
       "reward_credits": 500,
       "aggregate_field": "profit",
       "meta": {
         "codec": {
-          "giver_id": "cadet_amy",
-          "giver": "Amy, Federation Cadet",
+          "giver_id": "feddy_the_support_bot",
+          "giver": "Feddy, Senior Federation Support Chatbot (Mark IX)",
           "pages": [
-            "<emotion value=\"content\">Great, you've made your first trade!</emotion> Now here's the thing — that Sparrow you're flying is a loaner from the Federation. It's fine for getting started, but you're going to want your own ship.",
-            "<emotion value=\"anticipation\">Our goal is to upgrade you to a Kestrel Courier.</emotion> It's fast, reliable, and it's yours to keep. To get there, you'll need to earn some credits. Keep trading between ports — buy low, sell high — and you'll have enough in no time."
+            "<emotion value=\"content\">You made your first trade! Looks like my advice is actually useful for once.</emotion> Now, you should know that the Sparrow you're flying is a loaner from the Federation. It's actually been missing from our records for 35 years. Once the quartermaster finds out, they'll want it back. So you should get your own ship.",
+            "<emotion value=\"anticipation\">I'm thinking you could get a... Kestrel Courier?</emotion> Yeah, that would work. It's fast, reliable, and an upstart like you can probably afford it. Keep trading between ports — buy low, sell high — and you should get there."
           ]
         },
         "denominator": "credits"
@@ -112,9 +102,7 @@
       "name": "Purchase a kestrel",
       "description": "Buy a Kestrel Courier from a shipyard.",
       "eval_type": "count_filtered",
-      "event_types": [
-        "ship.traded_in"
-      ],
+      "event_types": ["ship.traded_in"],
       "target_value": 1,
       "reward_credits": 1000,
       "payload_filter": {
@@ -124,11 +112,9 @@
     {
       "step_index": 7,
       "name": "Accept a contract from the contracts board",
-      "description": "Visit the contracts board and accept a new contract from Commander Voss.",
+      "description": "Visit the contracts board and accept a new contract from the Venture Chamber.",
       "eval_type": "count_filtered",
-      "event_types": [
-        "quest.assigned"
-      ],
+      "event_types": ["quest.assigned"],
       "target_value": 1,
       "reward_credits": 250,
       "payload_filter": {
@@ -136,11 +122,11 @@
       },
       "meta": {
         "codec": {
-          "giver_id": "cadet_amy",
-          "giver": "Amy, Federation Cadet",
+          "giver_id": "feddy_the_support_bot",
+          "giver": "Feddy, Senior Federation Support Chatbot (Mark IX)",
           "pages": [
-            "<emotion value=\"impressed\">Nice work on the Kestrel, pilot!</emotion> You're really getting the hang of this. Now it's time to take on something bigger.",
-            "<emotion value=\"neutral\" />The Federation contracts board has new assignments available. You'll find it at the Megaport, accessible via a button on the Player panel. Commander Voss has posted a contract about forming corporations and managing fleets. <emotion value=\"encouraging\">Head to the mega port and accept his contract to continue your training.</emotion>"
+            "<emotion value=\"proud\">Nice work on the Kestrel!</emotion> For once I get to deal with someone who gets things done. You make an old support bot proud. <emotion value=\"nostalgic\">Moments like these make me feel like it was all worth it...</emotion>",
+            "<emotion value=\"neutral\" />Ahem. Anyway. You should look for new contracts. This one came to you because you had a Federation ship, but there are other assignments out there from all sorts of entities. You'll find them at the Megaport, accessible via a button in the Player panel. I've heard that the Venture Chamber is encouraging people to start corporations. That would really level up your trading. <emotion value=\"affectionate\">Check it out. It's been good meeting you.</emotion>"
           ]
         }
       }

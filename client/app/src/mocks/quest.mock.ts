@@ -7,7 +7,7 @@ export const MOCK_QUEST_STEPS: QuestStep[] = [
   {
     meta: {
       codec: {
-        giver_id: "cadet_amy",
+        giver_id: "feddy_the_support_bot",
         giver: "Amy, Federation Cadet",
         pages: [
           '<emotion value="excitable">Welcome to the galaxy, pilot! <emotion value="content" />I\'m Amy, a representative from the Federation, and I\'ll be guiding you through your first steps as a spacefaring trader.',
@@ -28,7 +28,7 @@ export const MOCK_QUEST_STEPS: QuestStep[] = [
   {
     meta: {
       codec: {
-        giver_id: "cadet_amy",
+        giver_id: "feddy_the_support_bot",
         giver: "Amy, Federation Cadet",
         pages: [
           "Great job on your first warp! Now, let's find the Megaport. The Megaport is a major hub for trade and commerce in the galaxy, and it's a great place to start your trading career. Keep warping to adjacent sectors until you find one that contains a Megaport. Once you arrive, you'll have access to markets, shipyards, and other facilities that will help you on your journey.",
@@ -47,7 +47,7 @@ export const MOCK_QUEST_STEPS: QuestStep[] = [
   {
     meta: {
       codec: {
-        giver_id: "cadet_amy",
+        giver_id: "feddy_the_support_bot",
         giver: "Amy, Federation Cadet",
         pages: [
           "Now that you've found the Megaport, it's time to refuel your ship. Purchase warp fuel to recharge your drives and continue your journey through the galaxy.",
@@ -77,7 +77,7 @@ export const MOCK_QUEST_STEPS: QuestStep[] = [
   {
     meta: {
       codec: {
-        giver_id: "cadet_amy",
+        giver_id: "feddy_the_support_bot",
         giver: "Amy, Federation Cadet",
         pages: [
           "<emotion value=\"content\">Great, you've made your first trade!</emotion> Now here's the thing — that Sparrow you're flying is a loaner from the Federation. It's fine for getting started, but you're going to want your own ship.",
@@ -108,7 +108,7 @@ export const MOCK_QUEST_STEPS: QuestStep[] = [
   {
     meta: {
       codec: {
-        giver_id: "cadet_amy",
+        giver_id: "feddy_the_support_bot",
         giver: "Amy, Federation Cadet",
         pages: [
           "<emotion value=\"impressed\">Nice work on the Kestrel, pilot!</emotion> You're really getting the hang of this. Now it's time to take on something bigger.",
@@ -131,7 +131,7 @@ export const MOCK_TUTORIAL_CORPS_STEPS: QuestStep[] = [
   {
     meta: {
       codec: {
-        giver_id: "commander_voss",
+        giver_id: "venture_chamber_agent",
         giver: "Voss, Commander",
         pages: [
           "Now that you've got a handle on trading and navigation, it's time to think bigger. Corporations are the backbone of power in this galaxy.",
@@ -151,7 +151,7 @@ export const MOCK_TUTORIAL_CORPS_STEPS: QuestStep[] = [
   {
     meta: {
       codec: {
-        giver_id: "commander_voss",
+        giver_id: "venture_chamber_agent",
         giver: "Voss, Commander",
         pages: [
           "Excellent! Now that you're part of a corporation, you can command fleet ships. Corporation ships operate independently from your personal vessel, allowing you to run tasks across multiple sectors simultaneously.",

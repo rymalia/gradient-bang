@@ -3,8 +3,8 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { AnimatePresence, motion } from "motion/react"
 import { ArrowRightIcon, CaretLeftIcon, WaveSineIcon } from "@phosphor-icons/react"
 
-import CharacterPortrait1 from "@/assets/images/characters/fed-cadet-1.png"
-import CharacterPortrait2 from "@/assets/images/characters/fed-cadet-2.png"
+import FeddyPortrait from "@/assets/images/characters/feddy_the_support_bot.png"
+import VeecyPortrait from "@/assets/images/characters/venture_chamber_agent.png"
 import { DottedTitle } from "@/components/DottedTitle"
 import { Button } from "@/components/primitives/Button"
 import { Card } from "@/components/primitives/Card"
@@ -15,9 +15,14 @@ import { BaseDialog } from "./BaseDialog"
 
 import type { SayTextAction } from "@/types/actions"
 
-const VOICE_ID_MAP = {
-  cadet_amy: "6ccbfb76-1fc6-48f7-b71d-91ac6298247b",
-  commander_voss: "0ad65e7f-006c-47cf-bd31-52279d487913",
+const VOICE_ID_MAP: Record<string, string> = {
+  feddy_the_support_bot: "c961b81c-a935-4c17-bfb3-ba2239de8c2f", // Kyle
+  venture_chamber_agent: "cbaf8084-f009-4838-a096-07ee2e6612b1", // Maya
+}
+
+const PORTRAIT_MAP: Record<string, string> = {
+  feddy_the_support_bot: FeddyPortrait,
+  venture_chamber_agent: VeecyPortrait,
 }
 
 export const QuestCodec = () => {
@@ -97,7 +102,7 @@ export const QuestCodec = () => {
             className="shrink-0 absolute left-0 bottom-0 z-10"
           >
             <img
-              src={codec?.giver_id === "commander_voss" ? CharacterPortrait2 : CharacterPortrait1}
+              src={PORTRAIT_MAP[codec?.giver_id ?? ""] ?? FeddyPortrait}
               alt={codec?.giver}
               className="h-80 w-auto object-contain z-20"
             />

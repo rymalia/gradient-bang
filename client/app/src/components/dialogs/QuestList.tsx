@@ -4,8 +4,8 @@ import { cva } from "class-variance-authority"
 import { motion } from "motion/react"
 import { CheckCircleIcon, LockSimpleIcon } from "@phosphor-icons/react"
 
-import CharacterPortrait1 from "@/assets/images/characters/fed-cadet-1.png"
-import CharacterPortrait2 from "@/assets/images/characters/fed-cadet-2.png"
+import FeddyPortrait from "@/assets/images/characters/feddy_the_support_bot.png"
+import VeecyPortrait from "@/assets/images/characters/venture_chamber_agent.png"
 import useGameStore from "@/stores/game"
 import { cn } from "@/utils/tailwind"
 
@@ -15,20 +15,20 @@ import { BaseDialog } from "./BaseDialog"
 
 const QUEST_GIVERS = [
   {
-    id: "cadet-amy",
-    name: "Cadet Amy",
-    description: "Federation Intake",
+    id: "feddy_the_support_bot",
+    name: "Feddy",
+    description: "Federation Support Chatbot (Mark IX)",
     questCode: "tutorial",
     locked: false,
-    portrait: CharacterPortrait1,
+    portrait: FeddyPortrait,
   },
   {
-    id: "commander-voss",
-    name: "Commander Voss",
-    description: "Federation Military",
+    id: "venture_chamber_agent",
+    name: "Veecy",
+    description: "Venture Chamber Recruitment",
     questCode: "tutorial_corporations",
     locked: false,
-    portrait: CharacterPortrait2,
+    portrait: VeecyPortrait,
   },
   {
     id: "dr-nexus",
@@ -190,7 +190,13 @@ export const QuestList = () => {
   )
 
   return (
-    <BaseDialog modalName="quest_list" title="Quests" size="lg" useDiamondFX diamondRef={diamondRef}>
+    <BaseDialog
+      modalName="quest_list"
+      title="Quests"
+      size="lg"
+      useDiamondFX
+      diamondRef={diamondRef}
+    >
       <div ref={diamondRef} className="flex flex-row gap-6 justify-center">
         {QUEST_GIVERS.map((questGiver, index) => (
           <QuestGiverCard
