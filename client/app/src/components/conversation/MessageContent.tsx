@@ -230,7 +230,10 @@ export const MessageContent = ({
           }
         })}
         {isMessageEmpty(message) ?
-          <Thinking className={cn("opacity-50 animate-pulse", classNames.thinking)} />
+          <Thinking
+            startTime={message.createdAt}
+            className={cn("opacity-50 animate-pulse", classNames.thinking)}
+          />
         : null}
       </div>
     </div>

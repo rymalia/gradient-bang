@@ -29,9 +29,10 @@ def _make_voice_agent(**overrides):
 
 EXPECTED_TOOLS = {
     "my_status", "plot_course", "list_known_ports", "rename_ship",
-    "rename_corporation", "corporation_info", "leaderboard_resources",
-    "ship_definitions", "send_message", "combat_initiate", "combat_action",
-    "load_game_info", "start_task", "stop_task", "steer_task", "query_task_progress",
+    "rename_corporation", "create_corporation", "corporation_info",
+    "leaderboard_resources", "ship_definitions", "send_message",
+    "combat_initiate", "combat_action", "load_game_info",
+    "start_task", "stop_task", "steer_task", "query_task_progress",
 }
 
 
@@ -461,6 +462,54 @@ class TestCorporationInfoSummary:
         summary = summarize_corporation_info(result)
         assert "2 total" in summary
         assert "Alpha Corp" in summary
+
+
+# ── Corporation direct tools ──────────────────────────────────────────
+
+
+@pytest.mark.unit
+class TestCorporationDirectTools:
+    """Verify create_corporation and rename_corporation call game_client correctly."""
+
+    @pytest.mark.asyncio
+    async def test_create_corporation_calls_game_client(self):
+        agent = _make_voice_agent()
+        agent._game_client.create_corporation = AsyncMock(
+            return_value={"request_id": "req-create"}
+        )
+        params = MagicMock()
+        params.arguments = {"name": "Test Corp"}
+        params.result_callback = AsyncMock()
+
+        await agent._handle_create_corporation(params)
+
+        agent._game_client.create_corporation.assert_called_once_with(
+            name="Test Corp", character_id="char-123",
+        )
+        params.result_callback.assert_called_once()
+        result = params.result_callback.call_args[0][0]
+        assert result == {"status": "Executed."}
+        assert agent.is_recent_request_id("req-create")
+
+    @pytest.mark.asyncio
+    async def test_rename_corporation_calls_game_client(self):
+        agent = _make_voice_agent()
+        agent._game_client.rename_corporation = AsyncMock(
+            return_value={"request_id": "req-rename"}
+        )
+        params = MagicMock()
+        params.arguments = {"name": "New Name"}
+        params.result_callback = AsyncMock()
+
+        await agent._handle_rename_corporation(params)
+
+        agent._game_client.rename_corporation.assert_called_once_with(
+            name="New Name", character_id="char-123",
+        )
+        params.result_callback.assert_called_once()
+        result = params.result_callback.call_args[0][0]
+        assert result == {"status": "Executed."}
+        assert agent.is_recent_request_id("req-rename")
 
 
 # ── Corp ship routing guard ───────────────────────────────────────────

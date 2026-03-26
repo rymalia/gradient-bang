@@ -80,7 +80,7 @@ NO_TOOL_WATCHDOG_DELAY = 5.0
 
 # Tools restricted to player ships only (corp ships cannot use these).
 PLAYER_ONLY_TOOLS = frozenset({
-    "create_corporation", "join_corporation", "leave_corporation",
+    "join_corporation", "leave_corporation",
     "kick_corporation_member", "sell_ship", "bank_withdraw",
 })
 
@@ -105,7 +105,6 @@ ASYNC_TOOL_COMPLETIONS = {
     "bank_withdraw": "bank.transaction",
     "transfer_credits": "credits.transfer",
     "dump_cargo": "salvage.created",
-    "create_corporation": "corporation.created",
     "join_corporation": "corporation.member_joined",
     "leave_corporation": "corporation.member_left",
     "kick_corporation_member": "corporation.member_kicked",

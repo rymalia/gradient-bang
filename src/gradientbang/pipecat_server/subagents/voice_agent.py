@@ -129,6 +129,7 @@ class VoiceAgent(LLMAgent):
             "list_known_ports": self._handle_list_known_ports,
             "rename_ship": self._handle_rename_ship,
             "rename_corporation": self._handle_rename_corporation,
+            "create_corporation": self._handle_create_corporation,
             "send_message": self._handle_send_message,
             "combat_initiate": self._handle_combat_initiate,
             "combat_action": self._handle_combat_action,
@@ -278,6 +279,18 @@ class VoiceAgent(LLMAgent):
     async def _handle_rename_corporation(self, params: FunctionCallParams):
         args = params.arguments
         result = await self._game_client.rename_corporation(
+            name=args["name"],
+            character_id=self._character_id,
+        )
+        self._track_request_id_from_result(result)
+        await params.result_callback(
+            {"status": "Executed."},
+            properties=FunctionCallResultProperties(run_llm=False),
+        )
+
+    async def _handle_create_corporation(self, params: FunctionCallParams):
+        args = params.arguments
+        result = await self._game_client.create_corporation(
             name=args["name"],
             character_id=self._character_id,
         )

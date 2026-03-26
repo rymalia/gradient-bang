@@ -30,6 +30,7 @@ export const ConversationProvider = ({ children }: React.PropsWithChildren) => {
 
   const userStoppedTimeout = useRef<ReturnType<typeof setTimeout>>(undefined)
   const botStoppedSpeakingTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const placeholderTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const assistantStreamResetRef = useRef<number>(0)
   const botOutputLastChunkRef = useRef<{ spoken: string; unspoken: string }>({
     spoken: "",
@@ -55,6 +56,8 @@ export const ConversationProvider = ({ children }: React.PropsWithChildren) => {
     useConversationStore.getState().clearMessages()
     clearTimeout(botStoppedSpeakingTimeoutRef.current)
     botStoppedSpeakingTimeoutRef.current = undefined
+    clearTimeout(placeholderTimeoutRef.current)
+    placeholderTimeoutRef.current = undefined
     botOutputLastChunkRef.current = { spoken: "", unspoken: "" }
 
     // Set initial thinking state before first speech
@@ -101,6 +104,9 @@ export const ConversationProvider = ({ children }: React.PropsWithChildren) => {
     // finalization mid-response.
     clearTimeout(botStoppedSpeakingTimeoutRef.current)
     botStoppedSpeakingTimeoutRef.current = undefined
+    // Bot is already responding; cancel placeholder debounce
+    clearTimeout(placeholderTimeoutRef.current)
+    placeholderTimeoutRef.current = undefined
 
     ensureAssistantMessage()
 
@@ -146,6 +152,8 @@ export const ConversationProvider = ({ children }: React.PropsWithChildren) => {
     // Bot is speaking again; reset the finalize timer (bot was just pausing).
     clearTimeout(botStoppedSpeakingTimeoutRef.current)
     botStoppedSpeakingTimeoutRef.current = undefined
+    clearTimeout(placeholderTimeoutRef.current)
+    placeholderTimeoutRef.current = undefined
     useConversationStore.getState().setIsThinking(false)
   })
 
@@ -153,6 +161,10 @@ export const ConversationProvider = ({ children }: React.PropsWithChildren) => {
     // User started a new turn; bot's turn is done. Fast-forward: finalize immediately.
     finalizeLastAssistantMessageIfPending()
     clearTimeout(userStoppedTimeout.current)
+    // Cancel placeholder debounce and remove any empty placeholder
+    clearTimeout(placeholderTimeoutRef.current)
+    placeholderTimeoutRef.current = undefined
+    useConversationStore.getState().removeEmptyLastMessage("assistant")
 
     // Only finalize the previous user message if the bot has responded since
     // the user last spoke. This prevents finalizing during VAD gaps (brief
@@ -177,6 +189,15 @@ export const ConversationProvider = ({ children }: React.PropsWithChildren) => {
 
     // If we got any transcript, cancel pending cleanup
     clearTimeout(userStoppedTimeout.current)
+
+    // When the user finishes an utterance, create a placeholder assistant
+    // message after a short debounce (avoids flicker during VAD gaps).
+    if (final) {
+      clearTimeout(placeholderTimeoutRef.current)
+      placeholderTimeoutRef.current = setTimeout(() => {
+        ensureAssistantMessage()
+      }, 300)
+    }
   })
 
   useRTVIClientEvent(RTVIEvent.UserStoppedSpeaking, () => {

@@ -27,12 +27,13 @@ You help the commander navigate, trade, fight, explore, and manage corporation s
 Tools you can call directly:
 
 - my_status, plot_course, list_known_ports, corporation_info, ship_definitions
-- send_message, rename_ship, combat_initiate, combat_action, load_game_info
+- send_message, rename_ship, rename_corporation, create_corporation
+- combat_initiate, combat_action, load_game_info
 
 Functions requiring a task (use `start_task`):
 
 - Movement, trading, purchasing fighters
-- Corporation management, ship purchasing
+- Joining/leaving corporations, kicking members, ship purchasing
 - Querying historical event log, dumping/collecting cargo/salvage
 - Recharging/transferring warp power, transferring credits
 - Banking (deposit/withdraw), placing/collecting garrisons

@@ -76,6 +76,7 @@ VOICE_TOOLS = ToolsSchema(
         # Direct actions
         RENAME_SHIP,
         RENAME_CORPORATION,
+        CREATE_CORPORATION,
         SEND_MESSAGE,
         # Combat
         COMBAT_INITIATE,
@@ -112,7 +113,6 @@ TASK_TOOLS = ToolsSchema(
         PLACE_FIGHTERS,
         COLLECT_FIGHTERS,
         # Corporation
-        CREATE_CORPORATION,
         JOIN_CORPORATION,
         LEAVE_CORPORATION,
         KICK_CORPORATION_MEMBER,

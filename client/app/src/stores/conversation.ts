@@ -568,11 +568,24 @@ export const useConversationStore = create<ConversationState>()((set, get) => ({
       }
 
       const now = new Date()
+      // Place function call before any active (non-final) assistant message
+      // so the assistant placeholder/response stays visually at the top.
+      // Same pattern as injectMessage().
+      let createdAt = now.toISOString()
+      const activeAssistant = state.messages.findLast(
+        (m: ConversationMessage) => m.role === "assistant" && !m.final
+      )
+      if (activeAssistant) {
+        const t = new Date(activeAssistant.createdAt)
+        t.setMilliseconds(t.getMilliseconds() - 1)
+        createdAt = t.toISOString()
+      }
+
       const message: ConversationMessage = {
         role: "function_call",
         final: false,
         parts: [],
-        createdAt: now.toISOString(),
+        createdAt,
         updatedAt: now.toISOString(),
         functionCall: {
           function_name: data.function_name,

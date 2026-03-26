@@ -46,7 +46,7 @@ class TaskAgentHarness:
             "purchase_fighters", "local_map_region", "path_with_region",
             "transfer_warp_power", "transfer_credits", "deposit_to_bank",
             "withdraw_from_bank", "combat_leave_fighters", "combat_collect_fighters",
-            "create_corporation", "leave_corporation", "kick_corporation_member",
+            "leave_corporation", "kick_corporation_member",
             "purchase_ship", "sell_ship", "event_query", "leaderboard_resources",
             "dump_cargo",
         ):
@@ -240,6 +240,11 @@ class TestCorpShipRestriction:
         await h.agent._handle_function_call(params)
 
         h.game_client.move.assert_called_once()
+
+    def test_create_corporation_not_in_task_tools(self):
+        h = TaskAgentHarness()
+        tool_names = {t.name for t in h.agent.build_tools()}
+        assert "create_corporation" not in tool_names
 
 
 @pytest.mark.unit
