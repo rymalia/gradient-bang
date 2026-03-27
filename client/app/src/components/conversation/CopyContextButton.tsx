@@ -12,7 +12,7 @@ export function CopyContextButton() {
   const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState(false)
   const [, copyToClipboard] = useCopyToClipboard()
-  const copiedTimerRef = useRef<ReturnType<typeof setTimeout>>()
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   useEffect(() => {
     // Zustand subscription runs outside React's render cycle — setState calls
