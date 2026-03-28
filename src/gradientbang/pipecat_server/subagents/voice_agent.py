@@ -240,6 +240,7 @@ class VoiceAgent(LLMAgent):
             "rename_ship": self._handle_rename_ship,
             "rename_corporation": self._handle_rename_corporation,
             "create_corporation": self._handle_create_corporation,
+            "leave_corporation": self._handle_leave_corporation,
             "send_message": self._handle_send_message,
             "combat_initiate": self._handle_combat_initiate,
             "combat_action": self._handle_combat_action,
@@ -411,7 +412,11 @@ class VoiceAgent(LLMAgent):
                 character_id=self._character_id,
             )
             self._track_request_id_from_result(result)
-            await params.result_callback(None)
+            self._begin_assistant_response_cycle()
+            await params.result_callback(
+                {"success": True},
+                properties=FunctionCallResultProperties(run_llm=True),
+            )
         except Exception as exc:
             await self._finish_event_tool_with_error(params, exc, run_llm=True)
 
@@ -423,7 +428,25 @@ class VoiceAgent(LLMAgent):
                 character_id=self._character_id,
             )
             self._track_request_id_from_result(result)
-            await params.result_callback(None)
+            self._begin_assistant_response_cycle()
+            await params.result_callback(
+                {"success": True},
+                properties=FunctionCallResultProperties(run_llm=True),
+            )
+        except Exception as exc:
+            await self._finish_event_tool_with_error(params, exc, run_llm=True)
+
+    async def _handle_leave_corporation(self, params: FunctionCallParams):
+        try:
+            result = await self._game_client.leave_corporation(
+                character_id=self._character_id,
+            )
+            self._track_request_id_from_result(result)
+            self._begin_assistant_response_cycle()
+            await params.result_callback(
+                {"success": True},
+                properties=FunctionCallResultProperties(run_llm=True),
+            )
         except Exception as exc:
             await self._finish_event_tool_with_error(params, exc, run_llm=True)
 

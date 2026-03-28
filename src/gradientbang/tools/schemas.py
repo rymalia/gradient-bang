@@ -463,8 +463,10 @@ JOIN_CORPORATION = FunctionSchema(
 LEAVE_CORPORATION = FunctionSchema(
     name="leave_corporation",
     description=(
-        "Leave your current corporation. "
-        "You lose corporation access and would need a new invite to rejoin."
+        "Leave your current corporation. High-stakes action, confirm with the user before calling. "
+        "You lose corporation access and would need a new invite to rejoin. "
+        "Corporation ships you own remain with the corporation and are not lost, but you lose access to them until you rejoin. "
+        "Note: if you are the last member, the corporation is automatically disbanded and any remaining assets are lost."
     ),
     properties={
         "character_id": {
