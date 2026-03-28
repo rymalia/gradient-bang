@@ -153,6 +153,18 @@ class TestCorpShipTaskIsolation:
                 f"Expected RTVI task_output with task_type='corp_ship'. "
                 f"Got: {task_outputs}"
             )
+            corp_actions = [
+                t
+                for t in corp_outputs
+                if t.get("payload", {}).get("task_message_type") == "action"
+            ]
+            assert corp_actions, (
+                f"Expected corp ship task_output to include at least one ACTION row. "
+                f"Got: {corp_outputs}"
+            )
+            assert any("my_status(" in t.get("payload", {}).get("text", "") for t in corp_actions), (
+                f"Expected my_status ACTION output for corp ship task. Got: {corp_actions}"
+            )
         finally:
             await h.stop()
 

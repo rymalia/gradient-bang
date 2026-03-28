@@ -56,6 +56,7 @@ from gradientbang.subagents.bus import (
     BusMessage,
     BusTaskCancelMessage,
     BusTaskRequestMessage,
+    BusTaskUpdateMessage,
     BusTaskUpdateRequestMessage,
 )
 from gradientbang.tools import GAME_METHOD_ALIASES, TASK_TOOLS
@@ -228,6 +229,7 @@ class TaskAgent(LLMAgent):
 
         # ── Task log ──
         self._task_log: List[str] = []
+        self._pending_task_output_tasks: set[asyncio.Task[None]] = set()
 
         # ── Pipeline refs (set in build_pipeline) ──
         self._llm_context: Optional[LLMContext] = None
@@ -320,6 +322,7 @@ class TaskAgent(LLMAgent):
         self._task_log.append(cancelled_text)
         logger.bind(task_output_type=TaskOutputType.FINISHED.value).info("{}", cancelled_text)
         await self._send_task_output(cancelled_text, TaskOutputType.FINISHED)
+        await self._drain_pending_task_outputs()
 
         if self._active_task_id and not self._finish_emitted:
             try:
@@ -416,6 +419,9 @@ class TaskAgent(LLMAgent):
 
     def _reset_task_state(self):
         self._archive_task_log()
+        for task in list(self._pending_task_output_tasks):
+            task.cancel()
+        self._pending_task_output_tasks.clear()
         self._task_finished = False
         self._cancelled = False
         self._task_finished_message = None
@@ -694,6 +700,7 @@ class TaskAgent(LLMAgent):
         await self._complete_task()
 
     async def _complete_task(self):
+        await self._drain_pending_task_outputs()
         self._clear_client_task_id(self._active_task_id)
         self._active_task_id = None  # Stop processing events
         _STATUS_MAP = {"completed": TaskStatus.COMPLETED, "cancelled": TaskStatus.CANCELLED}
@@ -982,15 +989,83 @@ class TaskAgent(LLMAgent):
             self._no_tool_watchdog_handle.cancel()
             self._no_tool_watchdog_handle = None
 
-    async def _send_task_output(self, text: str, message_type: TaskOutputType) -> None:
-        """Awaitable send of a task output update to the parent agent."""
-        if self._task_id and self._task_requester:
-            try:
-                await self.send_task_update(
-                    {"type": "output", "text": text, "message_type": message_type.value.lower()}
+    def _snapshot_task_output_route(self) -> Optional[tuple[str, str]]:
+        if not self._task_id or not self._task_requester:
+            return None
+        return self._task_id, self._task_requester
+
+    async def _deliver_task_output(
+        self,
+        text: str,
+        message_type: TaskOutputType,
+        *,
+        framework_task_id: str,
+        requester: str,
+    ) -> None:
+        try:
+            await self.send_message(
+                BusTaskUpdateMessage(
+                    source=self.name,
+                    target=requester,
+                    task_id=framework_task_id,
+                    update={
+                        "type": "output",
+                        "text": text,
+                        "message_type": message_type.value.lower(),
+                    },
                 )
-            except RuntimeError:
-                pass  # Task already completed
+            )
+        except Exception as exc:
+            logger.warning(
+                "TaskAgent '{}': failed to send task output {} for task {}: {}",
+                self.name,
+                message_type.value,
+                framework_task_id[:8],
+                exc,
+            )
+
+    def _queue_task_output(
+        self,
+        text: str,
+        message_type: TaskOutputType,
+        *,
+        framework_task_id: str,
+        requester: str,
+    ) -> None:
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
+
+        task = loop.create_task(
+            self._deliver_task_output(
+                text,
+                message_type,
+                framework_task_id=framework_task_id,
+                requester=requester,
+            )
+        )
+        self._pending_task_output_tasks.add(task)
+        task.add_done_callback(self._pending_task_output_tasks.discard)
+
+    async def _drain_pending_task_outputs(self) -> None:
+        while self._pending_task_output_tasks:
+            pending = tuple(self._pending_task_output_tasks)
+            await asyncio.gather(*pending, return_exceptions=True)
+
+    async def _send_task_output(self, text: str, message_type: TaskOutputType) -> None:
+        """Awaitable send of a task output update using the current task route snapshot."""
+        route = self._snapshot_task_output_route()
+        if not route:
+            return
+
+        framework_task_id, requester = route
+        await self._deliver_task_output(
+            text,
+            message_type,
+            framework_task_id=framework_task_id,
+            requester=requester,
+        )
 
     def _output(self, text: str, message_type: Optional[TaskOutputType] = None) -> None:
         type_value = message_type.value if message_type else None
@@ -1001,21 +1076,18 @@ class TaskAgent(LLMAgent):
         self._task_log.append(text)
 
         # Send to parent (VoiceAgent) so it can forward to client.
-        # Guard: only send if framework task is active (cleared after send_task_response).
-        if type_value and self._task_id and self._task_requester:
-
-            async def _send():
-                try:
-                    await self.send_task_update(
-                        {"type": "output", "text": text, "message_type": type_value.lower()}
-                    )
-                except RuntimeError:
-                    pass  # Task already completed
-
-            try:
-                asyncio.get_running_loop().create_task(_send())
-            except RuntimeError:
-                pass  # No event loop
+        # Snapshot the current route up front so short-lived tasks do not
+        # lose ACTION/STEP/EVENT rows when task state is cleared.
+        if message_type:
+            route = self._snapshot_task_output_route()
+            if route:
+                framework_task_id, requester = route
+                self._queue_task_output(
+                    text,
+                    message_type,
+                    framework_task_id=framework_task_id,
+                    requester=requester,
+                )
 
     def _emit_step(self, label: Optional[str] = "") -> None:
         self._step_counter += 1

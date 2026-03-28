@@ -108,6 +108,37 @@ class TestTaskLifecycleE2E:
         finally:
             await h.stop()
 
+    async def test_player_task_emits_action_output_before_completion(self):
+        """Short player tasks should still surface ACTION rows in RTVI task_output."""
+        h = E2EHarness(self.character_id, self.api, self.make_game_client)
+        await h.start()
+        try:
+            await h.join_game()
+
+            h.set_task_script([("my_status", {})])
+            result = await h.start_player_task("Check my status")
+            assert result["success"] is True, f"start_task failed: {result}"
+
+            completed = await h.wait_for_task_complete(timeout=30.0)
+            assert completed, "Task did not complete within timeout"
+
+            task_outputs = h.rtvi_events_of_type("task_output")
+            action_outputs = [
+                event
+                for event in task_outputs
+                if event.get("payload", {}).get("task_message_type") == "action"
+            ]
+
+            assert action_outputs, (
+                f"Expected at least one ACTION task_output for a short player task. "
+                f"Got: {task_outputs}"
+            )
+            assert any("my_status(" in event.get("payload", {}).get("text", "") for event in action_outputs), (
+                f"Expected my_status ACTION output. Got: {action_outputs}"
+            )
+        finally:
+            await h.stop()
+
 
 # ── Combat + Task interaction ─────────────────────────────────────────────
 
