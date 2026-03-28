@@ -10,8 +10,13 @@ from gradientbang.pipecat_server.subagents.task_agent import (
     TaskAgent,
     _SPECIAL_HANDLERS,
 )
-from gradientbang.subagents.bus import BusTaskCancelMessage, BusTaskRequestMessage
+from gradientbang.subagents.bus import (
+    BusTaskCancelMessage,
+    BusTaskRequestMessage,
+    BusTaskUpdateMessage,
+)
 from gradientbang.tools import TASK_TOOLS
+from gradientbang.utils.prompt_loader import TaskOutputType
 
 
 def _make_task_agent(**overrides):
@@ -336,3 +341,70 @@ class TestTaskIdTagging:
         await agent._complete_task()
 
         assert agent._game_client.current_task_id == "other-task"
+
+
+@pytest.mark.unit
+class TestTaskOutputDelivery:
+    async def test_action_output_uses_captured_task_route(self):
+        agent = _make_task_agent()
+        agent._task_id = "framework-task"
+        agent._task_requester = "voice_agent"
+        agent.send_message = AsyncMock()
+
+        agent._output("move({\"to_sector\": 5})", TaskOutputType.ACTION)
+        agent._task_id = None
+        agent._task_requester = None
+
+        await agent._drain_pending_task_outputs()
+
+        agent.send_message.assert_awaited_once()
+        message = agent.send_message.call_args.args[0]
+        assert isinstance(message, BusTaskUpdateMessage)
+        assert message.task_id == "framework-task"
+        assert message.target == "voice_agent"
+        assert message.update == {
+            "type": "output",
+            "text": 'move({"to_sector": 5})',
+            "message_type": "action",
+        }
+
+    async def test_complete_task_drains_pending_output_before_response(self):
+        agent = _make_task_agent()
+        agent._task_id = "framework-task"
+        agent._task_requester = "voice_agent"
+        agent._active_task_id = "task-1"
+        agent._task_finished_status = "completed"
+        agent._task_finished_message = "Done"
+        call_order = []
+
+        async def _send_message(message):
+            call_order.append(("update", message.update["message_type"]))
+
+        async def _send_task_response(*, response, status):
+            call_order.append(("response", response["message"]))
+
+        agent.send_message = AsyncMock(side_effect=_send_message)
+        agent.send_task_response = AsyncMock(side_effect=_send_task_response)
+
+        agent._output("my_status({})", TaskOutputType.ACTION)
+        await agent._complete_task()
+
+        assert call_order == [("update", "action"), ("response", "Done")]
+
+    async def test_task_output_delivery_failure_is_logged_and_completion_continues(self):
+        agent = _make_task_agent()
+        agent._task_id = "framework-task"
+        agent._task_requester = "voice_agent"
+        agent._active_task_id = "task-1"
+        agent._task_finished_status = "completed"
+        agent._task_finished_message = "Done"
+        agent.send_message = AsyncMock(side_effect=RuntimeError("boom"))
+        agent.send_task_response = AsyncMock()
+
+        agent._output("my_status({})", TaskOutputType.ACTION)
+
+        with patch("gradientbang.pipecat_server.subagents.task_agent.logger.warning") as warn:
+            await agent._complete_task()
+
+        warn.assert_called()
+        agent.send_task_response.assert_awaited_once()
