@@ -10,7 +10,7 @@ from gradientbang.pipecat_server.subagents.task_agent import (
     TaskAgent,
     _SPECIAL_HANDLERS,
 )
-from gradientbang.subagents.bus import BusTaskCancelMessage
+from gradientbang.subagents.bus import BusTaskCancelMessage, BusTaskRequestMessage
 from gradientbang.tools import TASK_TOOLS
 
 
@@ -18,9 +18,11 @@ def _make_task_agent(**overrides):
     """Create a TaskAgent with mock dependencies."""
     bus = MagicMock()
     bus.send = AsyncMock()
+    game_client = MagicMock()
+    game_client.current_task_id = None
     kwargs = {
         "bus": bus,
-        "game_client": MagicMock(),
+        "game_client": game_client,
         "character_id": "char-123",
     }
     kwargs.update(overrides)
@@ -219,7 +221,6 @@ class TestBusEventReception:
         await agent.on_bus_message(msg)
         agent._handle_event.assert_not_called()
 
-
 @pytest.mark.unit
 class TestSteering:
     async def test_steering_injected_into_context(self):
@@ -248,3 +249,90 @@ class TestCancellation:
         agent._task_requester = "parent"
         await agent.on_task_cancelled(BusTaskCancelMessage(source="parent", task_id="task-1", reason="test reason"))
         assert agent._cancelled is True
+
+
+@pytest.mark.unit
+class TestTaskIdTagging:
+    async def test_player_task_request_does_not_set_shared_client_task_id(self):
+        agent = _make_task_agent(tag_outbound_rpcs_with_task_id=False)
+        agent._llm_context = MagicMock()
+        agent.queue_frame = AsyncMock()
+        agent._game_client.task_lifecycle = AsyncMock()
+        agent._game_client.current_task_id = "shared-task"
+
+        await agent.on_task_request(
+            BusTaskRequestMessage(
+                source="voice",
+                task_id="task-1",
+                payload={"task_description": "Check status"},
+            )
+        )
+
+        assert agent._game_client.current_task_id == "shared-task"
+
+    async def test_corp_task_request_sets_task_id_on_dedicated_client(self):
+        agent = _make_task_agent(tag_outbound_rpcs_with_task_id=True)
+        agent._llm_context = MagicMock()
+        agent.queue_frame = AsyncMock()
+        agent._game_client.task_lifecycle = AsyncMock()
+
+        await agent.on_task_request(
+            BusTaskRequestMessage(
+                source="voice",
+                task_id="task-1",
+                payload={"task_description": "Check corp status"},
+            )
+        )
+
+        assert agent._game_client.current_task_id == "task-1"
+
+    async def test_player_task_completion_does_not_clear_unrelated_shared_client_task_id(self):
+        agent = _make_task_agent(tag_outbound_rpcs_with_task_id=False)
+        agent._active_task_id = "task-1"
+        agent._task_finished_status = "completed"
+        agent._task_finished_message = "Done"
+        agent.send_task_response = AsyncMock()
+        agent._game_client.current_task_id = "shared-task"
+
+        await agent._complete_task()
+
+        assert agent._game_client.current_task_id == "shared-task"
+
+    async def test_player_task_cancel_does_not_clear_unrelated_shared_client_task_id(self):
+        agent = _make_task_agent(tag_outbound_rpcs_with_task_id=False)
+        agent._active_task_id = "task-1"
+        agent._game_client.task_lifecycle = AsyncMock()
+        agent.send_task_response = AsyncMock()
+        agent._task_id = "task-1"
+        agent._task_requester = "parent"
+        agent._game_client.current_task_id = "shared-task"
+
+        await agent.on_task_cancelled(
+            BusTaskCancelMessage(source="parent", task_id="task-1", reason="test reason")
+        )
+
+        assert agent._game_client.current_task_id == "shared-task"
+
+    async def test_corp_task_completion_clears_matching_task_id(self):
+        agent = _make_task_agent(tag_outbound_rpcs_with_task_id=True)
+        agent._active_task_id = "task-1"
+        agent._task_finished_status = "completed"
+        agent._task_finished_message = "Done"
+        agent.send_task_response = AsyncMock()
+        agent._game_client.current_task_id = "task-1"
+
+        await agent._complete_task()
+
+        assert agent._game_client.current_task_id is None
+
+    async def test_corp_task_completion_keeps_other_client_task_id(self):
+        agent = _make_task_agent(tag_outbound_rpcs_with_task_id=True)
+        agent._active_task_id = "task-1"
+        agent._task_finished_status = "completed"
+        agent._task_finished_message = "Done"
+        agent.send_task_response = AsyncMock()
+        agent._game_client.current_task_id = "other-task"
+
+        await agent._complete_task()
+
+        assert agent._game_client.current_task_id == "other-task"

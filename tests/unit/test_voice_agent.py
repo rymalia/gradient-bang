@@ -698,7 +698,8 @@ class TestCorpShipRouting:
     """Verify start_task correctly classifies personal vs corp ship tasks."""
 
     @pytest.mark.asyncio
-    async def test_personal_ship_id_treated_as_player_task(self):
+    @patch("gradientbang.pipecat_server.subagents.voice_agent.AsyncGameClient")
+    async def test_personal_ship_id_treated_as_player_task(self, mock_client_cls):
         """If the LLM passes a UUID that isn't a corp ship, treat as player task."""
         agent = _make_voice_agent()
         # _is_corp_ship_id returns False for an unknown ship
@@ -706,6 +707,7 @@ class TestCorpShipRouting:
             return_value=_corp_api_response()
         )
         agent._VoiceAgent__game_client.base_url = "http://localhost"
+        mock_client_cls.return_value = MagicMock()
 
         params = MagicMock()
         params.arguments = {
@@ -719,6 +721,10 @@ class TestCorpShipRouting:
         result = await agent._handle_start_task(params)
         assert result["success"] is True
         assert result["task_type"] == "player_ship"
+        mock_client_cls.assert_not_called()
+        task_agent = agent.add_agent.call_args.args[0]
+        assert task_agent._game_client is agent._game_client
+        assert task_agent._tag_outbound_rpcs_with_task_id is False
 
     @pytest.mark.asyncio
     @patch("gradientbang.pipecat_server.subagents.voice_agent.AsyncGameClient")
@@ -744,14 +750,27 @@ class TestCorpShipRouting:
         result = await agent._handle_start_task(params)
         assert result["success"] is True
         assert result["task_type"] == "corp_ship"
+        mock_client_cls.assert_called_once_with(
+            base_url="http://localhost",
+            character_id=CORP_SHIP_ID,
+            actor_character_id="char-123",
+            entity_type="corporation_ship",
+            transport="supabase",
+            enable_event_polling=False,
+        )
+        task_agent = agent.add_agent.call_args.args[0]
+        assert task_agent._game_client is mock_client_cls.return_value
+        assert task_agent._tag_outbound_rpcs_with_task_id is True
 
     @pytest.mark.asyncio
-    async def test_character_id_as_ship_id_treated_as_player_task(self):
+    @patch("gradientbang.pipecat_server.subagents.voice_agent.AsyncGameClient")
+    async def test_character_id_as_ship_id_treated_as_player_task(self, mock_client_cls):
         """If the LLM passes the player's own character_id as ship_id, treat as player task."""
         # Use a valid UUID as character_id so it passes _is_valid_uuid
         char_id = "11111111-1111-1111-1111-111111111111"
         agent = _make_voice_agent(character_id=char_id)
         agent._VoiceAgent__game_client.base_url = "http://localhost"
+        mock_client_cls.return_value = MagicMock()
 
         params = MagicMock()
         params.arguments = {
@@ -764,12 +783,18 @@ class TestCorpShipRouting:
         result = await agent._handle_start_task(params)
         assert result["success"] is True
         assert result["task_type"] == "player_ship"
+        mock_client_cls.assert_not_called()
+        task_agent = agent.add_agent.call_args.args[0]
+        assert task_agent._game_client is agent._game_client
+        assert task_agent._tag_outbound_rpcs_with_task_id is False
 
     @pytest.mark.asyncio
-    async def test_no_ship_id_is_player_task(self):
+    @patch("gradientbang.pipecat_server.subagents.voice_agent.AsyncGameClient")
+    async def test_no_ship_id_is_player_task(self, mock_client_cls):
         """Default: no ship_id means player task."""
         agent = _make_voice_agent()
         agent._VoiceAgent__game_client.base_url = "http://localhost"
+        mock_client_cls.return_value = MagicMock()
 
         params = MagicMock()
         params.arguments = {"task_description": "Go to sector 5"}
@@ -779,3 +804,7 @@ class TestCorpShipRouting:
         result = await agent._handle_start_task(params)
         assert result["success"] is True
         assert result["task_type"] == "player_ship"
+        mock_client_cls.assert_not_called()
+        task_agent = agent.add_agent.call_args.args[0]
+        assert task_agent._game_client is agent._game_client
+        assert task_agent._tag_outbound_rpcs_with_task_id is False

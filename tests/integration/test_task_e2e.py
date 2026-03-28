@@ -335,6 +335,73 @@ class TestAsyncCompletionE2E:
                 h._task_llm_gate.set()
             await h.stop()
 
+    async def test_direct_status_during_player_task_is_not_task_tagged(self):
+        """Direct voice my_status should stay untagged while a player task is active."""
+        h = E2EHarness(self.character_id, self.api, self.make_game_client)
+        await h.start()
+        try:
+            await h.join_game()
+
+            # Keep the task active on the shared player client before its first
+            # tool call so a direct voice my_status runs concurrently with it.
+            h._task_llm_gate = asyncio.Event()
+            h.set_task_script([("my_status", {})])
+            result = await h.start_player_task("Check status async")
+            assert result["success"] is True, f"start_task failed: {result}"
+
+            await asyncio.sleep(0.5)
+
+            params = MagicMock(spec=FunctionCallParams)
+            params.arguments = {}
+            params.result_callback = AsyncMock()
+
+            baseline_llm_count = len(h.llm_messages)
+            await h.voice_agent._handle_my_status(params)
+            direct_request_id = h.game_client.last_request_id
+            assert direct_request_id, "voice my_status did not record a request_id"
+
+            events = await h.poll_and_feed_events()
+            direct_status_events = [
+                event for event in events
+                if event.get("event_type") == "status.snapshot"
+                and event.get("request_id") == direct_request_id
+            ]
+
+            assert len(direct_status_events) == 1, (
+                f"Expected exactly one direct status.snapshot for request {direct_request_id}, "
+                f"got {[(event.get('event_type'), event.get('request_id')) for event in events]}"
+            )
+            assert direct_status_events[0].get("task_id") is None, (
+                f"Direct voice my_status should not inherit the player task_id. "
+                f"Event: {direct_status_events[0]}"
+            )
+
+            h._task_llm_gate.set()
+            completed = await h.wait_for_task_complete(timeout=30.0)
+            assert completed, "Player task did not complete after direct my_status"
+
+            new_llm_messages = h.llm_messages[baseline_llm_count:]
+            direct_status_inferences = [
+                (content, run_llm) for content, run_llm in new_llm_messages
+                if run_llm is True
+                and "status.snapshot" in content
+                and "task.completed" not in content
+            ]
+            completion_inferences = [
+                (content, run_llm) for content, run_llm in new_llm_messages
+                if run_llm is True and "task.completed" in content
+            ]
+
+            assert direct_status_inferences, "Expected a direct status.snapshot inference trigger"
+            assert len(completion_inferences) == 1, (
+                f"Expected exactly one task.completed inference trigger, "
+                f"got {[(content[:100], run_llm) for content, run_llm in completion_inferences]}"
+            )
+        finally:
+            if h._task_llm_gate:
+                h._task_llm_gate.set()
+            await h.stop()
+
 
 # ── Client-initiated cancellation ────────────────────────────────────────
 

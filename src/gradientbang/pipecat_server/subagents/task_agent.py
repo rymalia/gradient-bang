@@ -192,12 +192,14 @@ class TaskAgent(LLMAgent):
         character_id: str,
         is_corp_ship: bool = False,
         task_metadata: Optional[Dict[str, Any]] = None,
+        tag_outbound_rpcs_with_task_id: bool = True,
     ):
         super().__init__(name, bus=bus, active=False)
         self._game_client = game_client
         self._character_id = character_id
         self._is_corp_ship = is_corp_ship
         self._task_metadata = task_metadata or {}
+        self._tag_outbound_rpcs_with_task_id = tag_outbound_rpcs_with_task_id
         self._tool_schemas: Dict[str, Any] = {t.name: t for t in self.build_tools()}
 
         # ── Task state ──
@@ -277,8 +279,9 @@ class TaskAgent(LLMAgent):
 
         logger.info(f"TaskAgent '{self.name}': received task {task_id[:8]}")
 
-        # Tag game client for event correlation
-        self._game_client.current_task_id = task_id
+        # Dedicated corp-task clients carry task_id on outbound RPCs. Player
+        # tasks share the voice client's game client, so tagging is opt-in.
+        self._set_client_task_id(task_id)
 
         # Emit task.start game event
         try:
@@ -333,7 +336,7 @@ class TaskAgent(LLMAgent):
                     f"TaskAgent '{self.name}': failed to emit task.finish (cancel): {exc}"
                 )
 
-        self._game_client.current_task_id = None
+        self._clear_client_task_id(self._active_task_id)
         await super().on_task_cancelled(message)
 
     async def on_task_update_requested(self, message: BusTaskUpdateRequestMessage) -> None:
@@ -437,6 +440,19 @@ class TaskAgent(LLMAgent):
 
     def get_task_log(self) -> List[str]:
         return list(self._task_log)
+
+    def _set_client_task_id(self, task_id: Optional[str]) -> None:
+        if not self._tag_outbound_rpcs_with_task_id or not task_id:
+            return
+        self._game_client.current_task_id = task_id
+
+    def _clear_client_task_id(self, expected_task_id: Optional[str]) -> None:
+        if not self._tag_outbound_rpcs_with_task_id:
+            return
+        current_task_id = getattr(self._game_client, "current_task_id", None)
+        if expected_task_id and current_task_id not in {None, expected_task_id}:
+            return
+        self._game_client.current_task_id = None
 
     # ── Event handling ────────────────────────────────────────────────
 
@@ -678,7 +694,7 @@ class TaskAgent(LLMAgent):
         await self._complete_task()
 
     async def _complete_task(self):
-        self._game_client.current_task_id = None
+        self._clear_client_task_id(self._active_task_id)
         self._active_task_id = None  # Stop processing events
         _STATUS_MAP = {"completed": TaskStatus.COMPLETED, "cancelled": TaskStatus.CANCELLED}
         status = _STATUS_MAP.get(self._task_finished_status, TaskStatus.FAILED)

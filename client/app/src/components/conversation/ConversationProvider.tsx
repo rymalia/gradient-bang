@@ -108,7 +108,10 @@ export const ConversationProvider = ({ children }: React.PropsWithChildren) => {
     clearTimeout(placeholderTimeoutRef.current)
     placeholderTimeoutRef.current = undefined
 
-    ensureAssistantMessage()
+    const createdNewAssistantMessage = ensureAssistantMessage()
+    if (createdNewAssistantMessage) {
+      botOutputLastChunkRef.current = { spoken: "", unspoken: "" }
+    }
 
     // Handle spacing for BotOutput chunks
     let textToAdd = data.text

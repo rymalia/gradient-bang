@@ -798,12 +798,13 @@ class VoiceAgent(LLMAgent):
             logger.error(f"Failed to end task agent '{agent_name}': {e}")
         self._children = [c for c in self._children if c.name != agent_name]
 
-        # Close corp ship game client
-        if is_corp and child and child._game_client != self._game_client:
+        # Close task-owned game clients. Player tasks now use a dedicated
+        # client too, so don't limit cleanup to corp-ship tasks.
+        if child and child._game_client != self._game_client:
             try:
                 await child._game_client.close()
             except Exception as e:
-                logger.error(f"Failed to close corp ship client: {e}")
+                logger.error(f"Failed to close task game client: {e}")
 
         self._update_polling_scope()
 
@@ -914,6 +915,7 @@ class VoiceAgent(LLMAgent):
                 character_id=target_character_id,
                 is_corp_ship=bool(ship_id),
                 task_metadata=task_metadata,
+                tag_outbound_rpcs_with_task_id=bool(ship_id),
             )
 
             self._pending_tasks[agent_name] = payload
