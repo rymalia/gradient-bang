@@ -146,6 +146,7 @@ export const Conversation: React.FC<ConversationProps> = memo(
   }) => {
     const [showSystem, setShowSystem] = useState(false)
     const llmIsWorking = useConversationStore((state) => state.isThinking)
+    const sayTextActive = useConversationStore((state) => state.sayTextActive)
     const thinkCount = useRef(0)
 
     const { isConnected } = usePipecatConnectionState()
@@ -204,43 +205,45 @@ export const Conversation: React.FC<ConversationProps> = memo(
               <ToggleControl size="sm" checked={showSystem} onCheckedChange={setShowSystem} />
             </div>
             <div className="relative flex-1 mb-0 text-foreground">
-              <div className="absolute bottom-0 inset-x-0 h-15 z-10 pointer-events-none pl-ui-xs">
-                <div className="relative inline-block">
-                  <ShipOSDVisualizer
-                    barLineCap="square"
-                    participantType="bot"
-                    barColor="white"
-                    peakLineColor="--color-terminal"
-                    peakLineThickness={2}
-                    peakOffset={6}
-                    barMaxHeight={60}
-                    barCount={12}
-                    barWidth={4}
-                    barGap={8}
-                    barOrigin="bottom"
-                    isThinking={llmIsWorking}
-                    thinkingSpeed={4}
-                    thinkingMaxHeight={15}
-                    className={llmIsWorking ? "opacity-40" : "opacity-100"}
-                  />
-                  <AnimatePresence>
-                    {llmIsWorking && (
-                      <motion.div
-                        key="thinking-badge"
-                        initial={{ y: 20, opacity: 0 }}
-                        animate={{ y: 0, opacity: 1 }}
-                        exit={{ y: 20, opacity: 0 }}
-                        transition={{ duration: 0.2, ease: "easeOut" }}
-                        className="absolute bottom-ui-xs inset-x-0 flex flex-col items-center justify-center"
-                      >
-                        <div className="px-2 py-1 bg-terminal-background/80 elbow elbow-1 elbow-offset-0 elbow-size-6 elbow-terminal text-terminal-foreground text-xs uppercase animate-pulse">
-                          Thinking
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
+              {!sayTextActive && (
+                <div className="absolute bottom-0 inset-x-0 h-15 z-10 pointer-events-none pl-ui-xs">
+                  <div className="relative inline-block">
+                    <ShipOSDVisualizer
+                      barLineCap="square"
+                      participantType="bot"
+                      barColor="white"
+                      peakLineColor="--color-terminal"
+                      peakLineThickness={2}
+                      peakOffset={6}
+                      barMaxHeight={60}
+                      barCount={12}
+                      barWidth={4}
+                      barGap={8}
+                      barOrigin="bottom"
+                      isThinking={llmIsWorking}
+                      thinkingSpeed={4}
+                      thinkingMaxHeight={15}
+                      className={llmIsWorking ? "opacity-40" : "opacity-100"}
+                    />
+                    <AnimatePresence>
+                      {llmIsWorking && (
+                        <motion.div
+                          key="thinking-badge"
+                          initial={{ y: 20, opacity: 0 }}
+                          animate={{ y: 0, opacity: 1 }}
+                          exit={{ y: 20, opacity: 0 }}
+                          transition={{ duration: 0.2, ease: "easeOut" }}
+                          className="absolute bottom-ui-xs inset-x-0 flex flex-col items-center justify-center"
+                        >
+                          <div className="px-2 py-1 bg-terminal-background/80 elbow elbow-1 elbow-offset-0 elbow-size-6 elbow-terminal text-terminal-foreground text-xs uppercase animate-pulse">
+                            Thinking
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
                 </div>
-              </div>
+              )}
               <CardContent className="absolute inset-0 min-h-0  mask-[linear-gradient(to_bottom,black_60%,transparent_100%)]">
                 <ScrollArea className="relative w-full h-full pointer-events-auto">
                   <div className="flex flex-col gap-2 pb-20">

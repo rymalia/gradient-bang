@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from loguru import logger
 from pipecat.frames.frames import (
     InterruptionFrame,
+    LLMMessagesAppendFrame,
     LLMRunFrame,
     TranscriptionFrame,
     TTSSpeakFrame,
@@ -371,6 +372,10 @@ class ClientMessageHandler:
         pipeline_task = self._pipeline_task
         if not pipeline_task:
             return
+        # Ignore say-text while user input is muted (e.g. during the join intro).
+        if self._user_mute_state.get("muted"):
+            logger.info("say-text ignored: user input is muted (intro in progress)")
+            return
         text = msg_data.get("text", "") if isinstance(msg_data, dict) else ""
         voice_id = msg_data.get("voice_id") if isinstance(msg_data, dict) else None
         if text:
@@ -378,7 +383,7 @@ class ClientMessageHandler:
             frames = []
             if voice_id:
                 if not self._say_text_restore_voice.get("voice_id"):
-                    self._say_text_restore_voice["voice_id"] = self._tts._voice_id
+                    self._say_text_restore_voice["voice_id"] = self._tts._settings.voice
                 frames.append(TTSUpdateSettingsFrame(settings={"voice_id": voice_id}))
             else:
                 self._say_text_restore_voice["voice_id"] = None
@@ -401,6 +406,20 @@ class ClientMessageHandler:
         if restore_id:
             frames.append(TTSUpdateSettingsFrame(settings={"voice_id": restore_id}))
             self._say_text_restore_voice["voice_id"] = None
+        # Append context about the briefing and trigger inference so the bot
+        # can address anything that happened during the dialog (e.g. task
+        # completions). The inference gate handles cooldown/timing.
+        frames.append(
+            LLMMessagesAppendFrame(
+                messages=[
+                    {
+                        "role": "user",
+                        "content": "<event>The player just finished reading a contract briefing dialog. Do not comment on this unless there are pending events to address.</event>",
+                    }
+                ],
+                run_llm=True,
+            )
+        )
         await pipeline_task.queue_frames(frames)
 
     async def _handle_user_text_input(self, msg_type, msg_data):

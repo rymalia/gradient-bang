@@ -14,6 +14,7 @@ interface ConversationState {
   // Simple state per message for tracking spoken position
   botOutputMessageState: Map<string, BotOutputMessageCursor>
   isThinking: boolean
+  sayTextActive: boolean
 
   // Actions
   registerMessageCallback: (id: string, callback?: (message: ConversationMessage) => void) => void
@@ -73,6 +74,7 @@ interface ConversationState {
   }) => void
 
   setIsThinking: (thinking: boolean) => void
+  setSayTextActive: (active: boolean) => void
 }
 
 export const sortByCreatedAt = (a: ConversationMessage, b: ConversationMessage): number => {
@@ -217,6 +219,7 @@ export const useConversationStore = create<ConversationState>()((set, get) => ({
   messages: [],
   botOutputMessageState: new Map(),
   isThinking: false,
+  sayTextActive: false,
 
   registerMessageCallback: (id, callback) => {
     messageCallbacks.set(id, callback || (() => {}))
@@ -749,5 +752,10 @@ export const useConversationStore = create<ConversationState>()((set, get) => ({
   setIsThinking: (thinking) =>
     set({
       isThinking: thinking,
+    }),
+
+  setSayTextActive: (active) =>
+    set({
+      sayTextActive: active,
     }),
 }))

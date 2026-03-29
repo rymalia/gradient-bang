@@ -99,6 +99,8 @@ export const ConversationProvider = ({ children }: React.PropsWithChildren) => {
   }
 
   useRTVIClientEvent(RTVIEvent.BotOutput, (data: BotOutputData) => {
+    if (useConversationStore.getState().sayTextActive) return
+
     // A BotOutput event means the response is still active; cancel any
     // pending finalize timer from BotStoppedSpeaking to avoid premature
     // finalization mid-response.
@@ -138,6 +140,8 @@ export const ConversationProvider = ({ children }: React.PropsWithChildren) => {
   })
 
   useRTVIClientEvent(RTVIEvent.BotStoppedSpeaking, () => {
+    if (useConversationStore.getState().sayTextActive) return
+
     // Don't finalize immediately; start a timer. Bot may start speaking again (pause).
     clearTimeout(botStoppedSpeakingTimeoutRef.current)
     const store = useConversationStore.getState()
@@ -152,6 +156,8 @@ export const ConversationProvider = ({ children }: React.PropsWithChildren) => {
   })
 
   useRTVIClientEvent(RTVIEvent.BotStartedSpeaking, () => {
+    if (useConversationStore.getState().sayTextActive) return
+
     // Bot is speaking again; reset the finalize timer (bot was just pausing).
     clearTimeout(botStoppedSpeakingTimeoutRef.current)
     botStoppedSpeakingTimeoutRef.current = undefined

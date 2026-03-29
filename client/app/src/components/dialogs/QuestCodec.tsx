@@ -8,6 +8,7 @@ import VeecyPortrait from "@/assets/images/characters/venture_chamber_agent.png"
 import { DottedTitle } from "@/components/DottedTitle"
 import { Button } from "@/components/primitives/Button"
 import { Card } from "@/components/primitives/Card"
+import { useConversationStore } from "@/stores/conversation"
 import useGameStore from "@/stores/game"
 import { stripTags } from "@/utils/tts"
 
@@ -49,6 +50,7 @@ export const QuestCodec = () => {
   // Read back the current page text via TTS whenever the page changes
   useEffect(() => {
     if (!isOpen || !pages[page] || !giverId) return
+    useConversationStore.getState().setSayTextActive(true)
     dispatchAction({
       type: "say-text",
       payload: {
@@ -61,6 +63,7 @@ export const QuestCodec = () => {
   }, [isOpen, page, pages, giverId, dispatchAction])
 
   function dismiss() {
+    useConversationStore.getState().setSayTextActive(false)
     setActiveModal(undefined)
     setPage(0)
     setViewCodec(null)
