@@ -21,9 +21,11 @@ If you receive a user message beginning with "Steering instruction:", treat it a
 ## Historical Event Queries
 
 For tasks about past activity, load `load_game_info(topic="event_logs")` before building queries unless already loaded.
-For session-relative history questions, identify the session window first using join-originated `status.snapshot` markers (`filter_event_type="status.snapshot"` plus `filter_string_match="\"method\":\"join\""`), then query task history inside that bounded window.
-For "last session" or "session before last", do not start with broad `task.finish` or mixed event-type scans across a large date range.
-Only if join markers are unavailable should you infer the session window from nearby `task.start` and `task.finish` clusters.
+For session-relative history questions, treat a "session" as the most recent bounded cluster of `task.start` and `task.finish` activity, not as a join-marker search problem.
+For "last session" or "session before last", start with a small recent reverse query over `task.finish` and/or `task.start` in a bounded recent window, then infer the target session from the nearest cluster of task activity.
+Use join-originated `status.snapshot` markers only as supporting evidence if they already appear in results or if task history is insufficient. Do not start ordinary session questions by searching for join markers.
+When searching for an anchor by name or keyword, never use a bare `filter_string_match` query across all event types. Always pair the string match with a likely `filter_event_type` such as `task.finish`, `task.start`, `corporation.ship_purchased`, `trade.executed`, or `bank.transaction`.
+Do not use broad keyword searches that can match old `event.query` payloads and pull prior history queries back into the result set.
 
 For garrisoned-sector visit questions:
 

@@ -99,6 +99,18 @@ def _make_event(event_name: str, payload: dict = None, request_id: str = None) -
 
 
 @pytest.mark.unit
+class TestSessionLifecycle:
+    @pytest.mark.asyncio
+    async def test_join_records_session_start_time(self):
+        relay, _, _, _ = _make_relay()
+        assert relay.session_started_at is None
+
+        await relay.join()
+
+        assert relay.session_started_at is not None
+
+
+@pytest.mark.unit
 class TestExtractDisplayName:
     def test_from_player_mapping(self):
         assert extract_display_name({"player": {"name": "Alice"}}) == "Alice"

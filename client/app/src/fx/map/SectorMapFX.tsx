@@ -73,6 +73,11 @@ export interface NodeStyle {
   borderWidth: number
   borderStyle: "solid" | "dashed" | "dotted"
   borderPosition?: "center" | "inside"
+  borderInset?: number
+  // Inset border - a second border drawn inside the hex
+  insetBorder?: string
+  insetBorderWidth?: number
+  insetBorderOffset?: number
   outline: string
   outlineWidth: number
   // Port/icon fill color (overrides PortStyles color when set)
@@ -1128,7 +1133,21 @@ function getNodeStyle(
     const regionKey = slugifyRegion(node.region)
     const regionOverride = config.regionStyles[regionKey]
     if (regionOverride) {
-      baseStyle = { ...baseStyle, ...regionOverride }
+      if (isVisited) {
+        baseStyle = { ...baseStyle, ...regionOverride }
+      } else {
+        // Unvisited: region fill, keep original gray border on the edge,
+        // add an inset frame in the faded region color for visual distinction
+        baseStyle = {
+          ...baseStyle,
+          fill: regionOverride.fill ? applyAlpha(regionOverride.fill, 0.3) : baseStyle.fill,
+          outline: "none",
+          outlineWidth: 0,
+          insetBorder: regionOverride.border ? applyAlpha(regionOverride.border, 0.5) : undefined,
+          insetBorderWidth: 2,
+          insetBorderOffset: 6,
+        }
+      }
     }
   }
 
@@ -1218,14 +1237,8 @@ function renderSector(
 
   // NOTE: Glow is rendered separately in renderSectorGlows() so it can be feathered
 
-  // Render offset frame if enabled (outermost ring)
-  if (nodeStyle.offset && nodeStyle.offsetColor && nodeStyle.offsetSize && nodeStyle.offsetWeight) {
-    ctx.save()
-    ctx.strokeStyle = applyAlpha(nodeStyle.offsetColor, finalOpacity)
-    ctx.lineWidth = nodeStyle.offsetWeight
-    drawHex(ctx, world.x, world.y, effectiveHexSize + nodeStyle.offsetSize, false)
-    ctx.restore()
-  }
+  // NOTE: Offset frame is rendered in a separate pass (renderSectorOffsetFrames)
+  // so it always appears on top of all other sectors.
 
   // Render outline if specified
   if (nodeStyle.outline !== "none" && nodeStyle.outlineWidth > 0) {
@@ -1259,14 +1272,24 @@ function renderSector(
     ctx.strokeStyle = "transparent"
     drawHex(ctx, world.x, world.y, effectiveHexSize, true)
     ctx.restore()
-    // Draw border inset by half the border width (stroke only)
-    drawHex(ctx, world.x, world.y, effectiveHexSize - nodeStyle.borderWidth / 2, false)
+    // Draw border inset from edge
+    const inset = nodeStyle.borderInset ?? nodeStyle.borderWidth / 2
+    drawHex(ctx, world.x, world.y, effectiveHexSize - inset, false)
   } else {
     // Default: border centered on edge
     drawHex(ctx, world.x, world.y, effectiveHexSize, true)
   }
   ctx.setLineDash([])
   ctx.lineCap = "butt"
+
+  // Render inset border if specified (second border drawn inside the hex)
+  if (nodeStyle.insetBorder && nodeStyle.insetBorderWidth && nodeStyle.insetBorderOffset) {
+    ctx.save()
+    ctx.strokeStyle = applyAlpha(nodeStyle.insetBorder, finalOpacity)
+    ctx.lineWidth = nodeStyle.insetBorderWidth
+    drawHex(ctx, world.x, world.y, effectiveHexSize - nodeStyle.insetBorderOffset, false)
+    ctx.restore()
+  }
 
   // Render icon: garrison takes priority over port icons
   if (node.garrison) {
@@ -1311,6 +1334,47 @@ function renderSector(
     ctx.fill(isMegaPort ? megaPortPath : portPath)
     ctx.restore()
   }
+}
+
+/** Render offset frames for sectors that have them (separate pass so they draw on top of all sectors) */
+function renderSectorOffsetFrames(
+  ctx: CanvasRenderingContext2D,
+  data: MapSectorNode[],
+  scale: number,
+  hexSize: number,
+  config: SectorMapConfigBase,
+  coursePlotSectors: Set<number> | null = null,
+  hoveredSectorId: number | null = null,
+  animatingSectorId: number | null = null,
+  hoverScale = 1
+) {
+  data.forEach((node) => {
+    const isCurrent = config.current_sector_id !== undefined && node.id === config.current_sector_id
+    const isAnimating = node.id === animatingSectorId
+    const isInPlot = coursePlotSectors ? coursePlotSectors.has(node.id) : true
+    const finalOpacity = coursePlotSectors && !isInPlot ? COURSE_PLOT_INACTIVE_NODE_OPACITY : 1
+
+    const nodeStyle = getNodeStyle(node, config, hoveredSectorId)
+    if (
+      !nodeStyle.offset ||
+      !nodeStyle.offsetColor ||
+      !nodeStyle.offsetSize ||
+      !nodeStyle.offsetWeight
+    ) {
+      return
+    }
+
+    const world = hexToWorld(node.position[0], node.position[1], scale)
+    const currentScale = isCurrent && config.current_sector_scale ? config.current_sector_scale : 1
+    const effectiveHexSize =
+      isAnimating ? hexSize * currentScale * hoverScale : hexSize * currentScale
+
+    ctx.save()
+    ctx.strokeStyle = applyAlpha(nodeStyle.offsetColor, finalOpacity)
+    ctx.lineWidth = nodeStyle.offsetWeight
+    drawHex(ctx, world.x, world.y, effectiveHexSize + nodeStyle.offsetSize, false)
+    ctx.restore()
+  })
 }
 
 /** Render hop number badges for course plot sectors (rendered above animation overlay) */
@@ -2426,6 +2490,19 @@ function renderWithCameraStateAndInteraction(
       hoverScale
     )
   })
+
+  // Render offset frames on top of all sectors (e.g. current sector frame)
+  renderSectorOffsetFrames(
+    ctx,
+    cameraState.filteredData,
+    scale,
+    hexSize,
+    config,
+    coursePlotSectors,
+    hoveredSectorId,
+    animatingSectorId,
+    hoverScale
+  )
 
   if (config.debug) {
     renderDebugBounds(ctx, cameraState.filteredData, scale, hexSize)

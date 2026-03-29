@@ -71,7 +71,7 @@ export const MapLegend = () => {
               Neutral
             </div>
             <div className="inline-flex items-center gap-1 whitespace-nowrap">
-              <MapLegendNode fillColor="#000000" borderColor="rgba(180,180,180,1)" />
+              <MapLegendNode fillColor="#042f2e" borderColor="rgba(94,234,212,0.35)" />
               Unvisited
             </div>
             <div className="inline-flex items-center gap-1 whitespace-nowrap">

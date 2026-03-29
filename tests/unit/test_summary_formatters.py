@@ -97,3 +97,51 @@ class TestEventQuerySummary:
         )
 
         assert "status.snapshot: join marker:" in result
+
+    def test_omits_recursive_event_query_rows_by_default(self):
+        result = event_query_summary(
+            {
+                "events": [
+                    {
+                        "event": "event.query",
+                        "timestamp": "2026-03-29T12:00:00Z",
+                        "payload": {"count": 30, "has_more": True},
+                    },
+                    {
+                        "event": "task.finish",
+                        "timestamp": "2026-03-29T12:00:01Z",
+                        "payload": {"detail": "found the useful answer"},
+                    },
+                ],
+                "count": 2,
+                "filters": {"filter_string_match": "Aegis Cruiser"},
+            },
+            _nested_summary,
+        )
+
+        assert "event.query row omitted" in result
+        assert "nested query returned" not in result
+        assert "task.finish" in result
+
+    def test_keeps_event_query_rows_when_explicitly_requested(self):
+        result = event_query_summary(
+            {
+                "events": [
+                    {
+                        "event": "event.query",
+                        "timestamp": "2026-03-29T12:00:00Z",
+                        "payload": {"count": 30, "has_more": True},
+                    }
+                ],
+                "count": 1,
+                "filters": {"filter_event_type": "event.query"},
+            },
+            lambda event_name, payload: (
+                "nested query returned "
+                f"{payload.get('count', 0)} events"
+                f"{' (more available)' if payload.get('has_more') else ''}"
+            ),
+        )
+
+        assert "nested query returned 30 events (more available)" in result
+        assert "event.query row omitted" not in result

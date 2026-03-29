@@ -31,6 +31,7 @@ def _make_voice_agent(**overrides):
 EXPECTED_TOOLS = {
     "my_status", "plot_course", "list_known_ports", "rename_ship",
     "rename_corporation", "create_corporation", "corporation_info",
+    "leave_corporation",
     "leaderboard_resources", "ship_definitions", "send_message",
     "combat_initiate", "combat_action", "load_game_info",
     "start_task", "stop_task", "steer_task", "query_task_progress",
@@ -666,7 +667,7 @@ class TestCorporationDirectTools:
         )
         params.result_callback.assert_called_once()
         result = params.result_callback.call_args[0][0]
-        assert result is None
+        assert result == {"success": True}
         assert agent.is_recent_request_id("req-create")
 
     @pytest.mark.asyncio
@@ -686,7 +687,7 @@ class TestCorporationDirectTools:
         )
         params.result_callback.assert_called_once()
         result = params.result_callback.call_args[0][0]
-        assert result is None
+        assert result == {"success": True}
         assert agent.is_recent_request_id("req-rename")
 
 
@@ -871,3 +872,45 @@ class TestCorpShipRouting:
         task_agent = agent.add_agent.call_args.args[0]
         assert task_agent._game_client is agent._game_client
         assert task_agent._tag_outbound_rpcs_with_task_id is False
+
+    @pytest.mark.asyncio
+    @patch("gradientbang.pipecat_server.subagents.voice_agent.AsyncGameClient")
+    async def test_explicit_context_is_forwarded_to_task_payload(self, mock_client_cls):
+        agent = _make_voice_agent()
+        agent._VoiceAgent__game_client.base_url = "http://localhost"
+        mock_client_cls.return_value = MagicMock()
+
+        params = MagicMock()
+        params.arguments = {
+            "task_description": "Check recent history",
+            "context": "The commander asked about a sector visit.",
+        }
+
+        agent.add_agent = AsyncMock()
+
+        result = await agent._handle_start_task(params)
+
+        assert result["success"] is True
+        pending_payload = next(iter(agent._pending_tasks.values()))
+        assert pending_payload["context"] == "The commander asked about a sector visit."
+
+    @pytest.mark.asyncio
+    @patch("gradientbang.pipecat_server.subagents.voice_agent.AsyncGameClient")
+    async def test_session_task_gets_current_session_boundary_context(self, mock_client_cls):
+        relay = MagicMock()
+        relay.session_started_at = "2026-03-29T18:46:44+00:00"
+        agent = _make_voice_agent(event_relay=relay)
+        agent._VoiceAgent__game_client.base_url = "http://localhost"
+        mock_client_cls.return_value = MagicMock()
+
+        params = MagicMock()
+        params.arguments = {"task_description": "Tell me what we did in the last session"}
+
+        agent.add_agent = AsyncMock()
+
+        result = await agent._handle_start_task(params)
+
+        assert result["success"] is True
+        pending_payload = next(iter(agent._pending_tasks.values()))
+        assert "Current session started at 2026-03-29T18:46:44+00:00." in pending_payload["context"]
+        assert "last or previous session" in pending_payload["context"]

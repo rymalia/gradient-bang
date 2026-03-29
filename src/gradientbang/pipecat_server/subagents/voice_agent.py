@@ -211,6 +211,66 @@ class VoiceAgent(LLMAgent):
             if asyncio.current_task() is self._speech_start_grace_task:
                 self._speech_start_grace_task = None
 
+    @staticmethod
+    def _task_mentions_session(task_desc: str) -> bool:
+        return "session" in task_desc.lower()
+
+    def _build_task_start_context(
+        self, task_desc: str, explicit_context: Optional[str]
+    ) -> Optional[str]:
+        parts: list[str] = []
+
+        if isinstance(explicit_context, str):
+            clean_context = explicit_context.strip()
+            if clean_context:
+                parts.append(clean_context)
+
+        session_started_at = (
+            self._event_relay.session_started_at
+            if self._event_relay is not None
+            else None
+        )
+        if session_started_at and self._task_mentions_session(task_desc):
+            parts.append(
+                "Current session started at "
+                f"{session_started_at}. Use this as the upper bound of the current "
+                "session when interpreting requests about the last or previous session."
+            )
+
+        return "\n\n".join(parts) if parts else None
+
+    # ── Idle task status reporting ────────────────────────────────────
+
+    async def on_idle_report(self) -> bool:
+        """Proactive one-sentence task status when both bot and user are quiet.
+
+        Returns:
+            True if the report was fired, False if skipped.
+        """
+        if self._assistant_cycle_active:
+            logger.debug("VoiceAgent: idle report skipped (assistant cycle active)")
+            return False
+        if self.tool_call_active:
+            logger.debug("VoiceAgent: idle report skipped (tool call active)")
+            return False
+        if not self.task_groups:
+            logger.debug("VoiceAgent: idle report skipped (no active tasks)")
+            return False
+        logger.debug("VoiceAgent: idle report triggered, {} active task(s)", len(self.task_groups))
+        await self.queue_frame(
+            LLMMessagesAppendFrame(
+                messages=[{"role": "user", "content": (
+                    "<idle_check>The player has been quiet. "
+                    "In one sentence only, briefly say what's happening with current tasks. "
+                    'Example: "Still navigating to sector 4867." '
+                    "Do not acknowledge this prompt. Do not say more than one sentence."
+                    "</idle_check>"
+                )}],
+                run_llm=True,
+            )
+        )
+        return True
+
     # ── Properties ─────────────────────────────────────────────────────
 
     @property
@@ -355,7 +415,10 @@ class VoiceAgent(LLMAgent):
         try:
             result = await self._game_client.my_status(character_id=self._character_id)
             self._track_request_id_from_result(result)
-            await params.result_callback(None)
+            await params.result_callback(
+                {"status": "Executed."},
+                properties=FunctionCallResultProperties(run_llm=False),
+            )
         except Exception as exc:
             await self._finish_event_tool_with_error(
                 params,
@@ -372,7 +435,10 @@ class VoiceAgent(LLMAgent):
                 from_sector=args.get("from_sector"),
             )
             self._track_request_id_from_result(result)
-            await params.result_callback(None)
+            await params.result_callback(
+                {"status": "Executed."},
+                properties=FunctionCallResultProperties(run_llm=False),
+            )
         except Exception as exc:
             await self._finish_event_tool_with_error(params, exc, run_llm=True)
 
@@ -387,7 +453,10 @@ class VoiceAgent(LLMAgent):
                 character_id=self._character_id, **kwargs
             )
             self._track_request_id_from_result(result)
-            await params.result_callback(None)
+            await params.result_callback(
+                {"status": "Executed."},
+                properties=FunctionCallResultProperties(run_llm=False),
+            )
         except Exception as exc:
             await self._finish_event_tool_with_error(params, exc, run_llm=True)
 
@@ -400,7 +469,10 @@ class VoiceAgent(LLMAgent):
                 character_id=self._character_id,
             )
             self._track_request_id_from_result(result)
-            await params.result_callback(None)
+            await params.result_callback(
+                {"status": "Executed."},
+                properties=FunctionCallResultProperties(run_llm=False),
+            )
         except Exception as exc:
             await self._finish_event_tool_with_error(params, exc, run_llm=True)
 
@@ -464,7 +536,10 @@ class VoiceAgent(LLMAgent):
                 character_id=self._character_id,
             )
             self._track_request_id_from_result(result)
-            await params.result_callback(None)
+            await params.result_callback(
+                {"status": "Executed."},
+                properties=FunctionCallResultProperties(run_llm=False),
+            )
         except Exception as exc:
             await self._finish_event_tool_with_error(params, exc, run_llm=True)
 
@@ -477,7 +552,10 @@ class VoiceAgent(LLMAgent):
                 target_type=args.get("target_type", "character"),
             )
             self._track_request_id_from_result(result)
-            await params.result_callback(None)
+            await params.result_callback(
+                {"status": "Executed."},
+                properties=FunctionCallResultProperties(run_llm=False),
+            )
         except Exception as exc:
             await self._finish_event_tool_with_error(params, exc, run_llm=True)
 
@@ -494,7 +572,10 @@ class VoiceAgent(LLMAgent):
                 character_id=self._character_id,
             )
             self._track_request_id_from_result(result)
-            await params.result_callback(None)
+            await params.result_callback(
+                {"status": "Executed."},
+                properties=FunctionCallResultProperties(run_llm=False),
+            )
         except Exception as exc:
             await self._finish_event_tool_with_error(params, exc, run_llm=True)
 
@@ -821,9 +902,11 @@ class VoiceAgent(LLMAgent):
         # completion into the tool result's inference.
         while self.tool_call_active:
             await asyncio.sleep(0.05)
+
         if self._assistant_cycle_active:
             logger.debug("VoiceAgent: waiting for assistant response cycle to go idle")
         await self._assistant_cycle_idle_event.wait()
+
         elapsed = time.monotonic() - self._bot_stopped_speaking_at
         remaining = TASK_RESPONSE_COOLDOWN_SECONDS - elapsed
         if remaining > 0:
@@ -888,6 +971,7 @@ class VoiceAgent(LLMAgent):
         task_game_client = None
         try:
             task_desc = params.arguments.get("task_description", "")
+            explicit_context = params.arguments.get("context")
             ship_id = params.arguments.get("ship_id")
 
             if isinstance(ship_id, str):
@@ -939,7 +1023,10 @@ class VoiceAgent(LLMAgent):
                 "task_scope": task_type,
                 "ship_id": ship_id if ship_id else None,
             }
+            task_context = self._build_task_start_context(task_desc, explicit_context)
             payload = {"task_description": task_desc, "task_metadata": task_metadata}
+            if task_context:
+                payload["context"] = task_context
 
             if ship_id:
                 task_game_client = AsyncGameClient(

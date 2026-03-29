@@ -10,6 +10,7 @@ called from explicit phases in the router.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from enum import Enum
 from typing import (
     TYPE_CHECKING,
@@ -450,6 +451,7 @@ class EventRelay:
         self._first_status_delivered = False
         self._megaport_check_request_id: Optional[str] = None
         self._onboarding_complete = False
+        self._session_started_at: Optional[str] = None
 
         # Subscribe to game events from config registry
         for event_name in EVENT_CONFIGS:
@@ -464,6 +466,10 @@ class EventRelay:
     def game_client(self) -> AsyncGameClient:
         return self._game_client
 
+    @property
+    def session_started_at(self) -> Optional[str]:
+        return self._session_started_at
+
     # ── Session lifecycle ──────────────────────────────────────────────
 
     async def join(self) -> Mapping[str, Any]:
@@ -471,7 +477,9 @@ class EventRelay:
         self.is_new_player = None
         self._first_status_delivered = False
         self._onboarding_complete = False
+        self._session_started_at = None
         result = await self._game_client.join(self._character_id)
+        self._session_started_at = datetime.now(timezone.utc).isoformat()
         await self._game_client.subscribe_my_messages()
         await self._game_client.list_user_ships(character_id=self._character_id)
         await self._game_client.quest_status(character_id=self._character_id)
@@ -500,6 +508,7 @@ class EventRelay:
         self._first_status_delivered = False
         self._onboarding_complete = False
         self._megaport_check_request_id = None
+        self._session_started_at = None
 
     async def _send_initial_chat_history(self) -> None:
         try:

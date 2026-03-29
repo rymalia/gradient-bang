@@ -20,6 +20,12 @@ Always prefer specific filters over broad queries to minimize context usage.
 | Find task starts | filter_event_type="task.start" | filter_string_match="task.start" |
 | Most recent trade | filter_event_type="trade.executed", sort_direction="reverse", max_rows=1 | fetch all events |
 | Events from task X | filter_task_id="<uuid>" | fetch all events and filter |
+| Find an anchor by keyword | filter_event_type + filter_string_match | bare filter_string_match across all event types |
+
+Important:
+- Never use a bare `filter_string_match` query across all event types for anchor discovery.
+- Broad string matching can hit old `event.query` payloads, which causes recursive history-query results instead of real anchor events.
+- When searching for a named ship, purchase, or other anchor term, always pair the keyword with a likely `filter_event_type`.
 
 ## Two-Step Pattern for Task Analysis
 
@@ -101,21 +107,21 @@ use an anchor-first strategy.
 
 ### Session-before/session-after playbook
 
-1. Use join markers to define session windows.
-   - Treat join-originated `status.snapshot` events as the short-term session-start marker.
-   - Find them with a narrow query like:
+For short-term historical questions, interpret "session" as the nearest bounded cluster of `task.start` and `task.finish` activity inside a recent time window. Use join-originated `status.snapshot` markers only as supporting evidence, not as the first search.
+
+1. For "last session" or "session before last", start with a small recent reverse query over task history:
 ```
 event_query(
     start=..., end=...,
-    filter_event_type="status.snapshot",
-    filter_string_match="\"method\":\"join\"",
+    filter_event_type="task.finish",
     sort_direction="reverse",
-    max_rows=2
+    max_rows=10
 )
 ```
-   - Use `max_rows=2` for "last session" and `max_rows=3` for "session before last".
-   - Start with a recent bounded time range and only broaden if you do not find enough join markers.
-   - Do NOT query broad activity event types until you have identified the session window from join markers.
+   - Keep the time range bounded and recent, usually the last few days.
+   - If needed, run a matching `task.start` query in the same bounded window.
+   - Infer the target session from the nearest cluster of task activity rather than from a broad date scan.
+   - Do NOT start with mixed event-type scans across a large range.
 
 2. For session-relative questions around an anchor, find the anchor event or anchor task first with a narrow filtered query.
    - Prefer `filter_event_type` plus `filter_string_match` or `max_rows=1`
@@ -124,12 +130,14 @@ event_query(
    - `corporation.ship_purchased`
    - `trade.executed`
    - `bank.transaction`
+   - Try likely anchor event types one at a time rather than doing one broad keyword search across all event types
+   - For ship-purchase questions, prefer `corporation.ship_purchased` first, then `task.finish`
+   - Do not use bare `filter_string_match="Aegis Cruiser"`-style queries without `filter_event_type`
 
-3. Once you know the anchor timestamp, identify the neighboring join markers around that time.
-   - Use join-originated `status.snapshot` events to find the session window immediately before or after the anchor
-   - For "session after X", the window starts at the first join marker after the anchor
-   - For "session before X", the window ends at the last join marker before the anchor
-   - Only if join markers are unavailable should you fall back to inferring a session from the nearest cluster of `task.start` and `task.finish`
+3. Once you know the anchor timestamp, identify the neighboring task history around that time.
+   - Use nearby `task.start` and `task.finish` results to identify the session immediately before or after the anchor.
+   - Prefer the smallest bounded window that still contains the neighboring task cluster.
+   - If join-originated `status.snapshot` markers already appear in your results, you may use them as extra evidence for where the session likely began.
 
 4. Summarize from that bounded session window first.
    - Prefer `task.start` and `task.finish` first inside that exact window
@@ -138,9 +146,9 @@ event_query(
 
 5. Do NOT start with broad multi-type scans across a large time range.
    - Avoid querying several activity event types over a whole day or month before you have identified the target session window
-   - For "last session", do not start with `task.finish` or mixed event-type scans over a broad date range
+   - For "last session", do not broaden beyond a recent bounded task-history window unless the smaller query clearly did not capture enough activity
 
-If join markers are unavailable, treat the relevant session as the nearest cluster of `task.start` and `task.finish` activity around the anchor time.
+If task history is sparse or ambiguous, join-originated `status.snapshot` markers may help approximate session starts, but they are secondary evidence rather than the primary discovery path.
 
 ## Garrison Sector Activity Playbook
 

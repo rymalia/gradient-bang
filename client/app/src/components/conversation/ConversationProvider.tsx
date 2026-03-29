@@ -193,18 +193,21 @@ export const ConversationProvider = ({ children }: React.PropsWithChildren) => {
     // If we got any transcript, cancel pending cleanup
     clearTimeout(userStoppedTimeout.current)
 
-    // When the user finishes an utterance, create a placeholder assistant
-    // message after a short debounce (avoids flicker during VAD gaps).
     if (final) {
       clearTimeout(placeholderTimeoutRef.current)
-      placeholderTimeoutRef.current = setTimeout(() => {
-        ensureAssistantMessage()
-      }, 300)
     }
   })
 
   useRTVIClientEvent(RTVIEvent.UserStoppedSpeaking, () => {
     clearTimeout(userStoppedTimeout.current)
+
+    // Create a placeholder assistant message so the turn timer shows
+    // while waiting for the bot to respond.
+    clearTimeout(placeholderTimeoutRef.current)
+    placeholderTimeoutRef.current = setTimeout(() => {
+      ensureAssistantMessage()
+    }, 300)
+
     // If no transcript ends up arriving, ensure any accidental empty placeholder is removed.
     userStoppedTimeout.current = setTimeout(() => {
       const lastUser = useConversationStore

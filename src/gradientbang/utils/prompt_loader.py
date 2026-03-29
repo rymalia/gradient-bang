@@ -172,11 +172,12 @@ def clear_cache() -> None:
     load_prompt.cache_clear()
 
 
-def create_task_instruction_user_message(task: str) -> str:
+def create_task_instruction_user_message(task: str, context: Optional[str] = None) -> str:
     """Create a task-specific user message for the LLM.
 
     Args:
         task: The task to be completed.
+        context: Optional additional context to include with the task.
 
     Returns:
         Formatted prompt for the current decision point.
@@ -191,9 +192,24 @@ def create_task_instruction_user_message(task: str) -> str:
         "# Current time (UTC)",
         f"{datetime.now(timezone.utc).isoformat()}",
         "",
-        "# Task Instructions",
-        "",
-        f"{task}",
-        "",
     ]
+
+    if context and context.strip():
+        prompt_parts.extend(
+            [
+                "# Additional Context",
+                "",
+                context.strip(),
+                "",
+            ]
+        )
+
+    prompt_parts.extend(
+        [
+            "# Task Instructions",
+            "",
+            f"{task}",
+            "",
+        ]
+    )
     return "\n".join(prompt_parts)

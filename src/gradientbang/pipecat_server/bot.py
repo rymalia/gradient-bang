@@ -275,6 +275,7 @@ async def run_bot(transport, runner_args: RunnerArguments, **kwargs):
     # Context starts empty — messages and tools are injected into the
     # VoiceAgent via LLMAgentActivationArgs on the bus.
     context = LLMContext()
+    idle_report_time = float(os.getenv("BOT_IDLE_REPORT_TIME", "8.5"))
     user_aggregator, assistant_aggregator = LLMContextAggregatorPair(
         context,
         user_params=LLMUserAggregatorParams(
@@ -290,6 +291,7 @@ async def run_bot(transport, runner_args: RunnerArguments, **kwargs):
                 TextInputBypassFirstBotMuteStrategy(),
             ],
             vad_analyzer=SileroVADAnalyzer(),
+            user_idle_timeout=idle_report_time,
         ),
         assistant_params=LLMAssistantAggregatorParams(
             enable_auto_context_summarization=True,
@@ -512,6 +514,25 @@ async def run_bot(transport, runner_args: RunnerArguments, **kwargs):
     await agent_runner.add_agent(main_agent)
 
     # ── Event handlers ─────────────────────────────────────────────────
+
+    idle_report_count = 0
+    IDLE_REPORT_INCREMENT_SECS = 1.0
+
+    @user_aggregator.event_handler("on_user_turn_idle")
+    async def on_user_turn_idle(aggregator):
+        nonlocal idle_report_count
+        if await voice_agent.on_idle_report():
+            idle_report_count += 1
+            user_aggregator._user_idle_controller._user_idle_timeout = (
+                idle_report_time + idle_report_count * IDLE_REPORT_INCREMENT_SECS
+            )
+
+    @user_aggregator.event_handler("on_user_turn_started")
+    async def on_user_turn_started(aggregator):
+        nonlocal idle_report_count
+        if idle_report_count > 0:
+            idle_report_count = 0
+            user_aggregator._user_idle_controller._user_idle_timeout = idle_report_time
 
     @rtvi.event_handler("on_client_ready")
     async def on_client_ready(rtvi):

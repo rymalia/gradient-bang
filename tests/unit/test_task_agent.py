@@ -363,6 +363,29 @@ class TestTaskIdTagging:
 
         assert agent._game_client.current_task_id == "task-1"
 
+    async def test_task_request_context_is_included_in_initial_prompt(self):
+        agent = _make_task_agent(tag_outbound_rpcs_with_task_id=False)
+        agent._llm_context = MagicMock()
+        agent.queue_frame = AsyncMock()
+        agent._game_client.task_lifecycle = AsyncMock()
+
+        await agent.on_task_request(
+            BusTaskRequestMessage(
+                source="voice",
+                task_id="task-1",
+                payload={
+                    "task_description": "Summarize the last session",
+                    "context": "Current session started at 2026-03-29T18:46:44+00:00.",
+                },
+            )
+        )
+
+        messages = agent._llm_context.set_messages.call_args.args[0]
+        assert messages[1]["role"] == "user"
+        assert "# Additional Context" in messages[1]["content"]
+        assert "Current session started at 2026-03-29T18:46:44+00:00." in messages[1]["content"]
+        assert "Summarize the last session" in messages[1]["content"]
+
     async def test_player_task_completion_does_not_clear_unrelated_shared_client_task_id(self):
         agent = _make_task_agent(tag_outbound_rpcs_with_task_id=False)
         agent._active_task_id = "task-1"

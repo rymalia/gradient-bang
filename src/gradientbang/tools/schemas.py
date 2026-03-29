@@ -517,7 +517,7 @@ CORPORATION_INFO = FunctionSchema(
 
 MY_STATUS = FunctionSchema(
     name="my_status",
-    description="Get your current status including current sector position",
+    description="Get a snapshot of your current live state (ship, sector, cargo, credits). Does not contain any historical data.",
     properties={},
     required=[],
 )
@@ -843,10 +843,14 @@ COMBAT_ACTION = FunctionSchema(
 SEND_MESSAGE = FunctionSchema(
     name="send_message",
     description=(
-        "Send a chat message (broadcast or direct). For direct messages, you can "
-        "target by character name, ship name, or ship_id. to_ship_id accepts a full "
-        "UUID or a 6-8 hex prefix (unique within your corporation). If you see a "
-        "name like 'Fast Probe [abcd1234]', the bracket suffix is just a short id."
+        "Send an in-game chat message to OTHER PLAYERS (broadcast or direct). "
+        "This is ONLY for player-to-player communication — never use this to "
+        "respond to the commander, summarize information, or perform non-messaging "
+        "actions. Only call this when the commander explicitly asks to message or "
+        "hail another player/ship. For direct messages, target by character name, "
+        "ship name, or ship_id. to_ship_id accepts a full UUID or a 6-8 hex prefix "
+        "(unique within your corporation). If you see a name like "
+        "'Fast Probe [abcd1234]', the bracket suffix is just a short id."
     ),
     properties={
         "content": {

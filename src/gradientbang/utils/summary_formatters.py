@@ -1507,6 +1507,7 @@ def event_query_summary(
 
     # Only show task_id if we didn't filter by it (avoid redundancy)
     show_task_id = filters.get("filter_task_id") is None
+    include_event_query_rows = filters.get("filter_event_type") == "event.query"
 
     if not events:
         result = f"Query returned {count} event{'s' if count != 1 else ''}."
@@ -1518,6 +1519,7 @@ def event_query_summary(
     header = f"Query returned {count} event{'s' if count != 1 else ''}{filter_context}:"
     event_lines: List[str] = []
     page_events = [event for event in events if isinstance(event, dict)]
+    omitted_recursive_queries = 0
 
     def _event_line(text: str) -> str:
         normalized = _single_line(text).lstrip()
@@ -1525,6 +1527,9 @@ def event_query_summary(
 
     for event in page_events[:_EVENT_QUERY_MAX_EVENTS]:
         event_name = event.get("event", "unknown")
+        if event_name == "event.query" and not include_event_query_rows:
+            omitted_recursive_queries += 1
+            continue
         timestamp = event.get("timestamp")
         payload = event.get("payload", {})
         task_id = event.get("task_id")
@@ -1615,10 +1620,15 @@ def event_query_summary(
                 line = f"[{time_str}] {event_name}{task_suffix}"
             event_lines.append(_event_line(line))
 
-    omitted_events = max(len(page_events) - len(event_lines), 0)
+    omitted_events = max(len(page_events) - len(event_lines) - omitted_recursive_queries, 0)
 
     def _compose(lines: List[str], omitted: int) -> str:
         parts = [header, *lines]
+        if omitted_recursive_queries > 0:
+            parts.append(
+                f"... {omitted_recursive_queries} event.query row"
+                f"{'s' if omitted_recursive_queries != 1 else ''} omitted."
+            )
         if omitted > 0:
             parts.append(f"... {omitted} more event{'s' if omitted != 1 else ''} omitted.")
         if has_more:

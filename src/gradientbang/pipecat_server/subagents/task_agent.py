@@ -278,6 +278,7 @@ class TaskAgent(LLMAgent):
         payload = message.payload
         self._active_task_id = task_id
         self._task_description = (payload or {}).get("task_description", "")
+        task_context = (payload or {}).get("context", "")
         self._task_metadata = (payload or {}).get("task_metadata", self._task_metadata)
         self._task_start_monotonic = time.perf_counter()
 
@@ -303,7 +304,9 @@ class TaskAgent(LLMAgent):
             {"role": "system", "content": build_task_agent_prompt()},
             {
                 "role": "user",
-                "content": create_task_instruction_user_message(self._task_description),
+                "content": create_task_instruction_user_message(
+                    self._task_description, context=task_context
+                ),
             },
         ]
         self._llm_context.set_messages(messages)
