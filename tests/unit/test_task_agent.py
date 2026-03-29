@@ -3,6 +3,7 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from pipecat.services.llm_service import FunctionCallParams
 
 from gradientbang.pipecat_server.subagents.task_agent import (
     ASYNC_TOOL_COMPLETIONS,
@@ -32,6 +33,14 @@ def _make_task_agent(**overrides):
     }
     kwargs.update(overrides)
     return TaskAgent("test_task", **kwargs)
+
+
+def _make_function_call_params(function_name: str, arguments: dict | None = None):
+    params = MagicMock(spec=FunctionCallParams)
+    params.function_name = function_name
+    params.arguments = arguments or {}
+    params.result_callback = AsyncMock()
+    return params
 
 
 EXPECTED_TASK_TOOL_NAMES = {t.name for t in TASK_TOOLS.standard_tools}
@@ -143,11 +152,13 @@ class TestTaskAgentState:
         agent._active_task_id = "task-1"
         agent._task_finished = True
         agent._cancelled = True
+        agent._awaiting_completion_request_id = "req-123"
         agent._consecutive_error_count = 5
         agent._step_counter = 42
         agent._reset_task_state()
         assert agent._active_task_id is None
         assert agent._task_finished is False
+        assert agent._awaiting_completion_request_id is None
         assert agent._consecutive_error_count == 0
         assert agent._step_counter == 0
 
@@ -222,6 +233,38 @@ class TestBusEventReception:
         msg = BusGameEventMessage(
             source="player",
             event={"event_name": "error", "payload": {}},
+        )
+        await agent.on_bus_message(msg)
+        agent._handle_event.assert_not_called()
+
+    async def test_accepts_awaited_event_query_by_request_id(self):
+        from gradientbang.pipecat_server.subagents.bus_messages import BusGameEventMessage
+
+        agent = _make_task_agent()
+        agent._active_task_id = "task-uuid-123"
+        agent._awaiting_completion_event = "event.query"
+        agent._awaiting_completion_request_id = "req-123"
+        agent._handle_event = AsyncMock()
+
+        msg = BusGameEventMessage(
+            source="player",
+            event={"event_name": "event.query", "request_id": "req-123", "payload": {"count": 0}},
+        )
+        await agent.on_bus_message(msg)
+        agent._handle_event.assert_called_once()
+
+    async def test_ignores_unmatched_event_query_request_id(self):
+        from gradientbang.pipecat_server.subagents.bus_messages import BusGameEventMessage
+
+        agent = _make_task_agent()
+        agent._active_task_id = "task-uuid-123"
+        agent._awaiting_completion_event = "event.query"
+        agent._awaiting_completion_request_id = "req-123"
+        agent._handle_event = AsyncMock()
+
+        msg = BusGameEventMessage(
+            source="player",
+            event={"event_name": "event.query", "request_id": "req-999", "payload": {"count": 0}},
         )
         await agent.on_bus_message(msg)
         agent._handle_event.assert_not_called()
@@ -408,3 +451,91 @@ class TestTaskOutputDelivery:
 
         warn.assert_called()
         agent.send_task_response.assert_awaited_once()
+
+
+@pytest.mark.unit
+class TestEventQueryCompletionCorrelation:
+    async def test_event_query_tool_stores_request_id(self):
+        agent = _make_task_agent()
+        agent._active_task_id = "task-1"
+        agent._task_id = "framework-task"
+        agent._task_requester = "voice_agent"
+        params = _make_function_call_params(
+            "event_query",
+            {"start": "2026-03-27T00:00:00Z", "end": "2026-03-28T00:00:00Z"},
+        )
+        handler = AsyncMock(return_value={"request_id": "req-123", "count": 0})
+
+        with patch.object(agent, "_get_tool_handler", return_value=handler), patch.object(
+            agent, "_on_tool_call_completed", AsyncMock()
+        ):
+            await agent._handle_function_call(params)
+
+        assert agent._awaiting_completion_event == "event.query"
+        assert agent._awaiting_completion_request_id == "req-123"
+        agent._clear_awaited_completion()
+
+    async def test_event_query_without_request_id_clears_await(self):
+        agent = _make_task_agent()
+        agent._active_task_id = "task-1"
+        agent._task_id = "framework-task"
+        agent._task_requester = "voice_agent"
+        params = _make_function_call_params(
+            "event_query",
+            {"start": "2026-03-27T00:00:00Z", "end": "2026-03-28T00:00:00Z"},
+        )
+        handler = AsyncMock(return_value={"count": 0})
+
+        with patch.object(agent, "_get_tool_handler", return_value=handler), patch.object(
+            agent, "_on_tool_call_completed", AsyncMock()
+        ), patch("gradientbang.pipecat_server.subagents.task_agent.logger.warning") as warn:
+            await agent._handle_function_call(params)
+
+        assert agent._awaiting_completion_event is None
+        assert agent._awaiting_completion_request_id is None
+        warn.assert_called()
+
+    async def test_matching_event_query_clears_wait(self):
+        agent = _make_task_agent()
+        agent._active_task_id = "task-1"
+        agent._llm_context = MagicMock()
+        agent._llm_inflight = True
+        agent._awaiting_completion_event = "event.query"
+        agent._awaiting_completion_request_id = "req-123"
+
+        await agent._handle_event(
+            {"event_name": "event.query", "request_id": "req-123", "payload": {"count": 0}}
+        )
+
+        assert agent._awaiting_completion_event is None
+        assert agent._awaiting_completion_request_id is None
+
+    async def test_mismatched_event_query_does_not_clear_wait(self):
+        agent = _make_task_agent()
+        agent._active_task_id = "task-1"
+        agent._llm_context = MagicMock()
+        agent._llm_inflight = True
+        agent._awaiting_completion_event = "event.query"
+        agent._awaiting_completion_request_id = "req-123"
+
+        await agent._handle_event(
+            {"event_name": "event.query", "request_id": "req-999", "payload": {"count": 0}}
+        )
+
+        assert agent._awaiting_completion_event == "event.query"
+        assert agent._awaiting_completion_request_id == "req-123"
+        agent._clear_awaited_completion()
+
+    async def test_event_query_timeout_clears_request_id_and_recovers(self):
+        agent = _make_task_agent()
+        agent._awaiting_completion_event = "event.query"
+        agent._awaiting_completion_request_id = "req-123"
+        agent._schedule_pending_inference = AsyncMock()
+
+        with patch("gradientbang.pipecat_server.subagents.task_agent.logger.warning") as warn:
+            await agent._on_completion_event_timeout()
+
+        assert agent._awaiting_completion_event is None
+        assert agent._awaiting_completion_request_id is None
+        agent._schedule_pending_inference.assert_awaited_once()
+        warn.assert_called()

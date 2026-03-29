@@ -9,6 +9,7 @@ real TaskAgent pipeline with a scripted LLM, and real event relay routing.
 
 import asyncio
 import uuid
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -256,6 +257,46 @@ class TestAsyncCompletionE2E:
             assert len(status_bus) >= 1, (
                 f"Expected status.snapshot on bus (from my_status async completion). "
                 f"Bus events: {[e.get('event_name') for e in h.bus_events]}"
+            )
+        finally:
+            await h.stop()
+
+    async def test_event_query_completion_via_request_id_on_shared_client(self):
+        """Player-task event_query should complete via request_id correlation on shared client."""
+        h = E2EHarness(self.character_id, self.api, self.make_game_client)
+        await h.start()
+        try:
+            await h.join_game()
+
+            end_time = datetime.now(timezone.utc)
+            start_time = end_time - timedelta(hours=24)
+            h.set_task_script(
+                [
+                    (
+                        "event_query",
+                        {
+                            "start": start_time.isoformat(),
+                            "end": end_time.isoformat(),
+                            "max_rows": 10,
+                        },
+                    )
+                ]
+            )
+            result = await h.start_player_task("Summarize my recent activity")
+            assert result["success"] is True, f"start_task failed: {result}"
+
+            completed = await h.wait_for_task_complete(timeout=30.0)
+            assert completed, "Player task did not complete after event_query"
+
+            event_query_bus = [
+                event for event in h.bus_events if event.get("event_name") == "event.query"
+            ]
+            assert event_query_bus, (
+                f"Expected event.query on the bus. "
+                f"Bus events: {[e.get('event_name') for e in h.bus_events]}"
+            )
+            assert any(event.get("request_id") for event in event_query_bus), (
+                f"Expected event.query bus event to carry request_id. Got: {event_query_bus}"
             )
         finally:
             await h.stop()

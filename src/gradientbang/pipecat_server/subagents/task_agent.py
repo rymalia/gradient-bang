@@ -218,6 +218,7 @@ class TaskAgent(LLMAgent):
         self._inference_reasons: List[str] = []
         self._inference_watchdog_handle: Optional[asyncio.TimerHandle] = None
         self._awaiting_completion_event: Optional[str] = None
+        self._awaiting_completion_request_id: Optional[str] = None
         self._completion_event_timeout: Optional[asyncio.TimerHandle] = None
         self._no_tool_nudge_count: int = 0
         self._no_tool_watchdog_handle: Optional[asyncio.TimerHandle] = None
@@ -392,6 +393,15 @@ class TaskAgent(LLMAgent):
         if voice_agent_originated and event.get("event_name") == "error":
             return
 
+        if self._is_matching_awaited_event_query(event):
+            logger.debug(
+                "TaskAgent '{}': accepting event.query via request_id {}",
+                self.name,
+                self._awaiting_completion_request_id,
+            )
+            await self._handle_event(event)
+            return
+
         event_task_id = self._extract_event_task_id(event)
         # Events tagged with our task_id
         if event_task_id and event_task_id == self._active_task_id:
@@ -434,6 +444,7 @@ class TaskAgent(LLMAgent):
         self._tool_call_in_progress = False
         self._llm_inflight = False
         self._awaiting_completion_event = None
+        self._awaiting_completion_request_id = None
         self._idle_wait_event = None
         self._skip_context_events.clear()
         self._inference_reasons.clear()
@@ -457,6 +468,50 @@ class TaskAgent(LLMAgent):
         if expected_task_id and current_task_id not in {None, expected_task_id}:
             return
         self._game_client.current_task_id = None
+
+    def _clear_awaited_completion(self) -> None:
+        self._cancel_completion_timeout()
+        self._awaiting_completion_event = None
+        self._awaiting_completion_request_id = None
+
+    def _capture_async_completion_request_id(
+        self, tool_name: Optional[str], result_payload: Any
+    ) -> None:
+        if tool_name != "event_query" or self._awaiting_completion_event != "event.query":
+            return
+
+        request_id: Optional[str] = None
+        if isinstance(result_payload, dict):
+            candidate = result_payload.get("request_id")
+            if isinstance(candidate, str) and candidate.strip():
+                request_id = candidate.strip()
+
+        if request_id:
+            self._awaiting_completion_request_id = request_id
+            return
+
+        logger.warning(
+            "TaskAgent '{}': event_query result missing request_id; proceeding without await",
+            self.name,
+        )
+        self._clear_awaited_completion()
+
+    def _matches_awaited_completion(self, event: Dict[str, Any]) -> bool:
+        event_name = event.get("event_name")
+        if not self._awaiting_completion_event or event_name != self._awaiting_completion_event:
+            return False
+        if event_name != "event.query":
+            return True
+        request_id = self._awaiting_completion_request_id
+        if not request_id:
+            return False
+        event_request_id = event.get("request_id")
+        return isinstance(event_request_id, str) and event_request_id == request_id
+
+    def _is_matching_awaited_event_query(self, event: Dict[str, Any]) -> bool:
+        return event.get("event_name") == "event.query" and self._matches_awaited_completion(
+            event
+        )
 
     # ── Event handling ────────────────────────────────────────────────
 
@@ -545,15 +600,13 @@ class TaskAgent(LLMAgent):
 
         # Handle completion event arrival
         if event_name == "error" and self._awaiting_completion_event:
-            self._awaiting_completion_event = None
-            self._cancel_completion_timeout()
+            self._clear_awaited_completion()
             if not self._llm_inflight:
                 asyncio.create_task(self._schedule_pending_inference())
             return
 
-        if self._awaiting_completion_event and event_name == self._awaiting_completion_event:
-            self._awaiting_completion_event = None
-            self._cancel_completion_timeout()
+        if self._matches_awaited_completion(event):
+            self._clear_awaited_completion()
             if not self._llm_inflight:
                 asyncio.create_task(self._schedule_pending_inference())
             return
@@ -610,6 +663,7 @@ class TaskAgent(LLMAgent):
 
         if is_async_tool:
             self._awaiting_completion_event = expected_completion_event
+            self._awaiting_completion_request_id = None
             loop = asyncio.get_event_loop()
             self._completion_event_timeout = loop.call_later(
                 ASYNC_COMPLETION_TIMEOUT,
@@ -638,8 +692,7 @@ class TaskAgent(LLMAgent):
             result_payload = result
         except Exception as exc:
             if is_async_tool:
-                self._awaiting_completion_event = None
-                self._cancel_completion_timeout()
+                self._clear_awaited_completion()
             if sync_event_to_skip and sync_event_to_skip in self._skip_context_events:
                 self._skip_context_events[sync_event_to_skip] -= 1
                 if self._skip_context_events[sync_event_to_skip] <= 0:
@@ -655,6 +708,7 @@ class TaskAgent(LLMAgent):
             await self._on_tool_call_completed(tool_name, error_payload)
             return
 
+        self._capture_async_completion_request_id(tool_name, result_payload)
         await params.result_callback(
             result_payload, properties=FunctionCallResultProperties(run_llm=False)
         )
@@ -699,6 +753,7 @@ class TaskAgent(LLMAgent):
 
     async def _complete_task(self):
         await self._drain_pending_task_outputs()
+        self._clear_awaited_completion()
         self._clear_client_task_id(self._active_task_id)
         self._active_task_id = None  # Stop processing events
         _STATUS_MAP = {"completed": TaskStatus.COMPLETED, "cancelled": TaskStatus.CANCELLED}
@@ -736,8 +791,7 @@ class TaskAgent(LLMAgent):
                 if already_received:
                     # Event arrived during execution — clear the await and proceed.
                     if self._awaiting_completion_event == expected_event:
-                        self._awaiting_completion_event = None
-                        self._cancel_completion_timeout()
+                        self._clear_awaited_completion()
                 elif self._awaiting_completion_event == expected_event:
                     return  # Still waiting — defer until event or timeout
 
@@ -801,12 +855,20 @@ class TaskAgent(LLMAgent):
 
     async def _on_completion_event_timeout(self) -> None:
         if self._awaiting_completion_event:
-            logger.warning(
-                "TaskAgent '%s': timeout waiting for %s, proceeding",
-                self.name,
-                self._awaiting_completion_event,
-            )
+            if self._awaiting_completion_event == "event.query":
+                logger.warning(
+                    "TaskAgent '{}': timeout waiting for event.query request_id={}, proceeding",
+                    self.name,
+                    self._awaiting_completion_request_id,
+                )
+            else:
+                logger.warning(
+                    "TaskAgent '%s': timeout waiting for %s, proceeding",
+                    self.name,
+                    self._awaiting_completion_event,
+                )
             self._awaiting_completion_event = None
+            self._awaiting_completion_request_id = None
             self._completion_event_timeout = None
             await self._schedule_pending_inference()
 
@@ -882,8 +944,7 @@ class TaskAgent(LLMAgent):
         if self._no_tool_watchdog_handle:
             self._no_tool_watchdog_handle.cancel()
             self._no_tool_watchdog_handle = None
-        self._cancel_completion_timeout()
-        self._awaiting_completion_event = None
+        self._clear_awaited_completion()
 
     async def _force_finish_on_errors(self, last_error: str) -> None:
         self._task_finished = True
