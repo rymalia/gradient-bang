@@ -97,58 +97,30 @@ event_query(
 
 ## Session-Relative Questions
 
-For questions like:
+"Session" = nearest bounded cluster of `task.start`/`task.finish` activity. Use an anchor-first strategy:
 
-- "What did I do in the last session?"
-- "What happened in the session before the Aegis cruiser purchase?"
-- "Tell me about the session after I joined the corporation"
+### Playbook
 
-use an anchor-first strategy.
+1. **Find the anchor** — narrow filtered query first:
+   - "Last session" → query recent task history:
+   ```
+   event_query(
+       start=..., end=...,
+       filter_event_type="task.finish",
+       sort_direction="reverse",
+       max_rows=10
+   )
+   ```
+   - Anchor by name → pair `filter_event_type` (e.g., `corporation.ship_purchased`, `trade.executed`) with `filter_string_match`. Never bare `filter_string_match` without `filter_event_type`
 
-### Session-before/session-after playbook
+2. **Identify session window** — use nearby `task.start`/`task.finish` around the anchor timestamp. Keep the window as small as possible.
 
-For short-term historical questions, interpret "session" as the nearest bounded cluster of `task.start` and `task.finish` activity inside a recent time window. Use join-originated `status.snapshot` markers only as supporting evidence, not as the first search.
+3. **Summarize** — task summaries first. Only query `trade.executed`, `bank.transaction`, etc. if task history is insufficient.
 
-1. For "last session" or "session before last", start with a small recent reverse query over task history:
-```
-event_query(
-    start=..., end=...,
-    filter_event_type="task.finish",
-    sort_direction="reverse",
-    max_rows=10
-)
-```
-   - Keep the time range bounded and recent, usually the last few days.
-   - If needed, run a matching `task.start` query in the same bounded window.
-   - Infer the target session from the nearest cluster of task activity rather than from a broad date scan.
-   - Do NOT start with mixed event-type scans across a large range.
-
-2. For session-relative questions around an anchor, find the anchor event or anchor task first with a narrow filtered query.
-   - Prefer `filter_event_type` plus `filter_string_match` or `max_rows=1`
-   - Examples:
-   - `task.finish` with a purchase-related keyword
-   - `corporation.ship_purchased`
-   - `trade.executed`
-   - `bank.transaction`
-   - Try likely anchor event types one at a time rather than doing one broad keyword search across all event types
-   - For ship-purchase questions, prefer `corporation.ship_purchased` first, then `task.finish`
-   - Do not use bare `filter_string_match="Aegis Cruiser"`-style queries without `filter_event_type`
-
-3. Once you know the anchor timestamp, identify the neighboring task history around that time.
-   - Use nearby `task.start` and `task.finish` results to identify the session immediately before or after the anchor.
-   - Prefer the smallest bounded window that still contains the neighboring task cluster.
-   - If join-originated `status.snapshot` markers already appear in your results, you may use them as extra evidence for where the session likely began.
-
-4. Summarize from that bounded session window first.
-   - Prefer `task.start` and `task.finish` first inside that exact window
-   - Task summaries are usually enough to answer what the player was doing
-   - Only query `trade.executed`, `bank.transaction`, `warp.purchase`, or other detailed event types inside that already-bounded window if task history is not enough
-
-5. Do NOT start with broad multi-type scans across a large time range.
-   - Avoid querying several activity event types over a whole day or month before you have identified the target session window
-   - For "last session", do not broaden beyond a recent bounded task-history window unless the smaller query clearly did not capture enough activity
-
-If task history is sparse or ambiguous, join-originated `status.snapshot` markers may help approximate session starts, but they are secondary evidence rather than the primary discovery path.
+Rules:
+- Never start with broad multi-type scans across large time ranges
+- `status.snapshot` markers are secondary evidence only, not the primary search path
+- Always keep time ranges bounded and recent
 
 ## Garrison Sector Activity Playbook
 

@@ -2,7 +2,7 @@
 
 ## Ship Types
 
-**You do NOT know ship prices.** Prices change and you must NEVER quote a price from memory. Always call `ship_definitions()` first to get current prices from the database. This returns all ship data including purchase prices, cargo capacity, warp power, shields, and fighters.
+**Always call `ship_definitions()` before quoting prices or purchasing.** Never quote prices from memory — they may change. Returns all ship data: prices, cargo, warp, shields, fighters.
 
 Ship categories:
 - **Starter/Light** — cheap, low capacity
@@ -84,13 +84,9 @@ Each ship type has different:
 
 ## Purchasing Process
 
-1. **ALWAYS** call `ship_definitions()` first — never guess or assume prices
-2. Check your credits (personal or corp bank)
-3. Verify you can afford the ship (minus trade-in value if applicable)
-4. Call `purchase_ship` with `expected_price` set to the exact base price from `ship_definitions()`
-5. Receive status.update event confirming purchase
-
-**NEVER tell the pilot a ship's price without calling `ship_definitions()` first. The server rejects purchases with incorrect prices.**
+1. Call `ship_definitions()` first
+2. Check credits (personal or corp bank, minus trade-in if applicable)
+3. Call `purchase_ship` with `expected_price` from `ship_definitions()` — server rejects incorrect prices
 
 **IMPORTANT:** Personal ship purchases never require creating, joining, or leaving a corporation. If a purchase fails, report the error — do not modify corporation membership.
 

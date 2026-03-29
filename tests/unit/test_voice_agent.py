@@ -803,6 +803,44 @@ class TestVoiceToolErrorWrapping:
 
 
 @pytest.mark.unit
+class TestTaskToolWrappers:
+    @pytest.mark.asyncio
+    async def test_start_task_tool_success_stops_immediate_followup_inference(self):
+        agent = _make_voice_agent()
+        result = {
+            "success": True,
+            "message": "Task started",
+            "task_id": "task_123",
+            "task_type": "player_ship",
+        }
+        agent._handle_start_task = AsyncMock(return_value=result)
+        params = _make_function_call_params(function_name="start_task", result_callback=AsyncMock())
+
+        await agent._handle_start_task_tool(params)
+
+        params.result_callback.assert_awaited_once()
+        assert params.result_callback.await_args.args[0] == {"result": result}
+        properties = params.result_callback.await_args.kwargs["properties"]
+        assert properties.run_llm is False
+        assert agent._assistant_cycle_active is False
+
+    @pytest.mark.asyncio
+    async def test_start_task_tool_failure_continues_llm(self):
+        agent = _make_voice_agent()
+        result = {"success": False, "error": "already running"}
+        agent._handle_start_task = AsyncMock(return_value=result)
+        params = _make_function_call_params(function_name="start_task", result_callback=AsyncMock())
+
+        await agent._handle_start_task_tool(params)
+
+        params.result_callback.assert_awaited_once()
+        assert params.result_callback.await_args.args[0] == {"result": result}
+        properties = params.result_callback.await_args.kwargs["properties"]
+        assert properties.run_llm is True
+        assert agent._assistant_cycle_active is True
+
+
+@pytest.mark.unit
 class TestLeaderboardSummary:
     def test_summarize_leaderboard_multicategory_payload(self):
         summary = summarize_leaderboard(_leaderboard_api_response(), player_id="char-123")
@@ -1129,3 +1167,34 @@ class TestCorpShipRouting:
         pending_payload = next(iter(agent._pending_tasks.values()))
         assert "Current session started at 2026-03-29T18:46:44+00:00." in pending_payload["context"]
         assert "last or previous session" in pending_payload["context"]
+
+    @pytest.mark.asyncio
+    async def test_concurrent_player_start_task_only_allows_one(self):
+        from gradientbang.pipecat_server.subagents.task_agent import TaskAgent
+
+        agent = _make_voice_agent()
+        agent._task_groups = {}
+        agent._children = []
+
+        async def add_agent(task_agent):
+            await asyncio.sleep(0)
+            agent._children.append(task_agent)
+
+        agent.add_agent = AsyncMock(side_effect=add_agent)
+
+        params_a = MagicMock()
+        params_a.arguments = {"task_description": "Transfer 2000 credits"}
+        params_b = MagicMock()
+        params_b.arguments = {"task_description": "Transfer 2000 credits again"}
+
+        result_a, result_b = await asyncio.gather(
+            agent._handle_start_task(params_a),
+            agent._handle_start_task(params_b),
+        )
+
+        successes = [result for result in (result_a, result_b) if result["success"]]
+        failures = [result for result in (result_a, result_b) if not result["success"]]
+        assert len(successes) == 1
+        assert len(failures) == 1
+        assert "already has a task running" in failures[0]["error"]
+        assert len([child for child in agent._children if isinstance(child, TaskAgent)]) == 1

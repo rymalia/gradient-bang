@@ -121,6 +121,7 @@ class VoiceAgent(LLMAgent):
         self._assistant_cycle_idle_event: asyncio.Event = asyncio.Event()
         self._assistant_cycle_idle_event.set()
         self._speech_start_grace_task: Optional[asyncio.Task] = None
+        self._start_task_lock: asyncio.Lock = asyncio.Lock()
 
     # ── Lifecycle ───────────────────────────────────────────────────────
 
@@ -1009,103 +1010,104 @@ class VoiceAgent(LLMAgent):
 
     @traced
     async def _handle_start_task(self, params: FunctionCallParams) -> dict:
-        task_game_client = None
-        try:
-            task_desc = params.arguments.get("task_description", "")
-            explicit_context = params.arguments.get("context")
-            ship_id = params.arguments.get("ship_id")
+        async with self._start_task_lock:
+            task_game_client = None
+            try:
+                task_desc = params.arguments.get("task_description", "")
+                explicit_context = params.arguments.get("context")
+                ship_id = params.arguments.get("ship_id")
 
-            if isinstance(ship_id, str):
-                ship_id = ship_id.strip().strip("[]")
+                if isinstance(ship_id, str):
+                    ship_id = ship_id.strip().strip("[]")
 
-            if ship_id and not self._is_valid_uuid(ship_id):
-                try:
-                    resolved = await self._resolve_ship_id_prefix(ship_id)
-                except ValueError as exc:
-                    return {"success": False, "error": str(exc)}
-                if not resolved:
-                    return {"success": False, "error": f"Unknown ship_id '{ship_id}'."}
-                ship_id = resolved
+                if ship_id and not self._is_valid_uuid(ship_id):
+                    try:
+                        resolved = await self._resolve_ship_id_prefix(ship_id)
+                    except ValueError as exc:
+                        return {"success": False, "error": str(exc)}
+                    if not resolved:
+                        return {"success": False, "error": f"Unknown ship_id '{ship_id}'."}
+                    ship_id = resolved
 
-            # If ship_id is the player's character_id, or resolves to their
-            # personal ship rather than a corp ship, treat as a player task.
-            if ship_id:
-                if ship_id == self._character_id:
-                    ship_id = None
-                elif not await self._is_corp_ship_id(ship_id):
-                    logger.info(
-                        f"ship_id {ship_id[:8]} is not a corp ship, treating as player task"
+                # If ship_id is the player's character_id, or resolves to their
+                # personal ship rather than a corp ship, treat as a player task.
+                if ship_id:
+                    if ship_id == self._character_id:
+                        ship_id = None
+                    elif not await self._is_corp_ship_id(ship_id):
+                        logger.info(
+                            f"ship_id {ship_id[:8]} is not a corp ship, treating as player task"
+                        )
+                        ship_id = None
+
+                target_character_id = ship_id if ship_id else self._character_id
+
+                # Check duplicate: any child TaskAgent with same character_id
+                for child in self.children:
+                    if isinstance(child, TaskAgent) and child._character_id == target_character_id:
+                        return {
+                            "success": False,
+                            "error": f"Ship {target_character_id[:8]}... already has a task running. Stop it first.",
+                        }
+
+                # Corp ship limit
+                if ship_id:
+                    corp_count = self._count_active_corp_tasks()
+                    if corp_count >= MAX_CORP_SHIP_TASKS:
+                        return {
+                            "success": False,
+                            "error": f"Cannot start more than {MAX_CORP_SHIP_TASKS} corp ship tasks.",
+                        }
+
+                task_type = self._get_task_type(ship_id)
+                task_metadata = {
+                    "actor_character_id": self._character_id,
+                    "actor_character_name": self._display_name,
+                    "task_scope": task_type,
+                    "ship_id": ship_id if ship_id else None,
+                }
+                task_context = self._build_task_start_context(task_desc, explicit_context)
+                payload = {"task_description": task_desc, "task_metadata": task_metadata}
+                if task_context:
+                    payload["context"] = task_context
+
+                if ship_id:
+                    task_game_client = AsyncGameClient(
+                        base_url=self._game_client.base_url,
+                        character_id=target_character_id,
+                        actor_character_id=self._character_id,
+                        entity_type="corporation_ship",
+                        transport="supabase",
+                        enable_event_polling=False,
                     )
-                    ship_id = None
+                else:
+                    task_game_client = self._game_client
 
-            target_character_id = ship_id if ship_id else self._character_id
-
-            # Check duplicate: any child TaskAgent with same character_id
-            for child in self.children:
-                if isinstance(child, TaskAgent) and child._character_id == target_character_id:
-                    return {
-                        "success": False,
-                        "error": f"Ship {target_character_id[:8]}... already has a task running. Stop it first.",
-                    }
-
-            # Corp ship limit
-            if ship_id:
-                corp_count = self._count_active_corp_tasks()
-                if corp_count >= MAX_CORP_SHIP_TASKS:
-                    return {
-                        "success": False,
-                        "error": f"Cannot start more than {MAX_CORP_SHIP_TASKS} corp ship tasks.",
-                    }
-
-            task_type = self._get_task_type(ship_id)
-            task_metadata = {
-                "actor_character_id": self._character_id,
-                "actor_character_name": self._display_name,
-                "task_scope": task_type,
-                "ship_id": ship_id if ship_id else None,
-            }
-            task_context = self._build_task_start_context(task_desc, explicit_context)
-            payload = {"task_description": task_desc, "task_metadata": task_metadata}
-            if task_context:
-                payload["context"] = task_context
-
-            if ship_id:
-                task_game_client = AsyncGameClient(
-                    base_url=self._game_client.base_url,
+                agent_name = f"task_{uuid.uuid4().hex[:6]}"
+                task_agent = TaskAgent(
+                    agent_name,
+                    bus=self._bus,
+                    game_client=task_game_client,
                     character_id=target_character_id,
-                    actor_character_id=self._character_id,
-                    entity_type="corporation_ship",
-                    transport="supabase",
-                    enable_event_polling=False,
+                    is_corp_ship=bool(ship_id),
+                    task_metadata=task_metadata,
+                    tag_outbound_rpcs_with_task_id=bool(ship_id),
                 )
-            else:
-                task_game_client = self._game_client
 
-            agent_name = f"task_{uuid.uuid4().hex[:6]}"
-            task_agent = TaskAgent(
-                agent_name,
-                bus=self._bus,
-                game_client=task_game_client,
-                character_id=target_character_id,
-                is_corp_ship=bool(ship_id),
-                task_metadata=task_metadata,
-                tag_outbound_rpcs_with_task_id=bool(ship_id),
-            )
+                self._pending_tasks[agent_name] = payload
+                await self.add_agent(task_agent)
 
-            self._pending_tasks[agent_name] = payload
-            await self.add_agent(task_agent)
-
-            return {
-                "success": True,
-                "message": "Task started",
-                "task_id": agent_name,
-                "task_type": task_type,
-            }
-        except Exception as e:
-            logger.error(f"start_task failed: {e}")
-            if task_game_client and task_game_client != self._game_client:
-                await task_game_client.close()
-            return {"success": False, "error": str(e)}
+                return {
+                    "success": True,
+                    "message": "Task started",
+                    "task_id": agent_name,
+                    "task_type": task_type,
+                }
+            except Exception as e:
+                logger.error(f"start_task failed: {e}")
+                if task_game_client and task_game_client != self._game_client:
+                    await task_game_client.close()
+                return {"success": False, "error": str(e)}
 
     @traced
     async def _handle_stop_task(self, params: FunctionCallParams) -> dict:
@@ -1210,9 +1212,35 @@ class VoiceAgent(LLMAgent):
     # ── Task management tool wrappers ─────────────────────────────────
 
     async def _handle_start_task_tool(self, params: FunctionCallParams):
+        # If this is a personal-ship task and one is already running, reject
+        # immediately without calling the handler — nudge the LLM to wait.
+        ship_id = (params.arguments or {}).get("ship_id")
+        if not ship_id and self._has_active_player_task():
+            self._begin_assistant_response_cycle()
+            await params.result_callback(
+                {
+                    "error": (
+                        "Personal ship task is already running. "
+                        "Wait for task.completed before starting another. "
+                        "Tell the commander you will handle it after the current task finishes."
+                    )
+                },
+                properties=FunctionCallResultProperties(run_llm=True),
+            )
+            return
+
         result = await self._handle_start_task(params)
-        self._begin_assistant_response_cycle()
-        await params.result_callback({"result": result})
+        if isinstance(result, dict) and result.get("success"):
+            await params.result_callback(
+                {"result": result},
+                properties=FunctionCallResultProperties(run_llm=False),
+            )
+        else:
+            self._begin_assistant_response_cycle()
+            await params.result_callback(
+                {"result": result},
+                properties=FunctionCallResultProperties(run_llm=True),
+            )
 
     async def _handle_stop_task_tool(self, params: FunctionCallParams):
         result = await self._handle_stop_task(params)

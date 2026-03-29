@@ -2,12 +2,7 @@
 
 ## Map Knowledge
 
-As you explore the universe, you automatically build up map knowledge:
-- Every sector you visit is remembered
-- Port information (what they buy/sell) is recorded when discovered
-- Sector connections are mapped as you travel
-
-Your map knowledge persists between sessions.
+Visited sectors, port info, and connections are automatically recorded and persist between sessions.
 
 ## Navigation Strategies
 

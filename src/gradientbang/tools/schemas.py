@@ -906,7 +906,9 @@ START_TASK = FunctionSchema(
     name="start_task",
     description=(
         "Start a complex multi-step task for navigation, trading, or exploration. "
-        "Can control your own ship or a corporation ship."
+        "Can control your own ship or a corporation ship. "
+        "IMPORTANT: When a personal-ship task is running, wait for task.completed "
+        "before starting another personal-ship task."
     ),
     properties={
         "task_description": {
@@ -920,9 +922,11 @@ START_TASK = FunctionSchema(
         "ship_id": {
             "type": "string",
             "description": (
-                "Corporation ship ID to control. Accepts a full UUID or the short "
-                "prefix shown in brackets (e.g., [5a8369]). Omit this parameter "
-                "to control your own ship instead."
+                "Corporation ship ID to control. Only set this when the corp ship "
+                "is the ACTOR performing the work (e.g., exploring, trading). "
+                "OMIT ship_id when your personal ship is the actor — including "
+                "transfers/gifts TO a corp ship. Accepts full UUID or short prefix "
+                "(e.g., [5a8369])."
             ),
         },
     },
