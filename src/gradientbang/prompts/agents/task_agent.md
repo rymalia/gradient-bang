@@ -121,6 +121,20 @@ dump_cargo(items=[{"commodity":"quantum_foam","units":1}])
 → You will receive events: salvage.created, status.update, sector.update
 ```
 
+### Send Message
+
+There is no chat UI — `send_message` is the only way to send text to other players.
+
+```
+send_message(content="Greetings from sector 401!", msg_type="broadcast")
+→ You will receive events: chat.message
+```
+
+```
+send_message(content="Transferring warp now", msg_type="direct", to_player="Starfall")
+→ You will receive events: chat.message
+```
+
 ## Task Examples
 
 ### Moving Between Sectors

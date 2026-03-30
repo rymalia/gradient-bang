@@ -131,6 +131,11 @@ const garrisonsEquivalent = (
   return a.player_id === b.player_id && a.corporation_id === b.corporation_id
 }
 
+export const isBorderSector = (node: MapSectorNode): boolean => {
+  if (!node.visited || node.region === "Federation Space" || !node.adjacent_sectors) return false
+  return Object.values(node.adjacent_sectors).some((info) => info.region === "Federation Space")
+}
+
 /**
  * Deep comparison of two MapSectorNode objects for render-relevant properties.
  * Returns true if both sectors would produce the same visual output.
@@ -149,6 +154,7 @@ export const sectorsEquivalentForRender = (a: MapSectorNode, b: MapSectorNode): 
   if ((a.port as PortBase | null)?.port_class !== (b.port as PortBase | null)?.port_class)
     return false
   if (getLaneSignature(a) !== getLaneSignature(b)) return false
+  if (isBorderSector(a) !== isBorderSector(b)) return false
   return true
 }
 

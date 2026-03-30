@@ -1,3 +1,4 @@
+import { isBorderSector } from "@/utils/map"
 import { getPortCode } from "@/utils/port"
 
 import { GARRISON_ICON, MEGA_PORT_ICON, PORT_ICON, SHIP_ICON } from "./MapIcons"
@@ -92,6 +93,9 @@ export interface NodeStyle {
   glowRadius?: number
   glowColor?: string
   glowFalloff?: number // 0-1, where the color starts to fade (0 = immediate fade, 1 = solid then sharp edge)
+  // Split fill/border - diagonal split with second color (bottom-right half)
+  splitFill?: string
+  splitBorder?: string
 }
 
 // Map of slugified region names to partial style overrides
@@ -268,6 +272,14 @@ export const DEFAULT_REGION_STYLES: RegionStyleOverrides = {
   neutral: {
     fill: "#1e1b4b",
     border: "#818cf8",
+    outline: "rgba(99,102,241,0.5)",
+    iconColor: "#e0e7ff",
+  },
+  "neutral-border": {
+    fill: "#1e1b4b",
+    splitFill: "#042f2e",
+    border: "#818cf8",
+    splitBorder: "#5eead4",
     outline: "rgba(99,102,241,0.5)",
     iconColor: "#e0e7ff",
   },
@@ -608,6 +620,76 @@ function drawHex(ctx: CanvasRenderingContext2D, x: number, y: number, size: numb
   ctx.closePath()
   if (fill) ctx.fill()
   ctx.stroke()
+}
+
+function drawSplitHex(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  size: number,
+  fillA: string,
+  fillB: string,
+  borderA: string,
+  borderB: string,
+  borderWidth: number,
+  opacity: number
+) {
+  const verts = Array.from({ length: 6 }, (_, i) => {
+    const angle = (Math.PI / 3) * i
+    return { px: x + size * Math.cos(angle), py: y + size * Math.sin(angle) }
+  })
+
+  const buildHexPath = () => {
+    const p = new Path2D()
+    p.moveTo(verts[0].px, verts[0].py)
+    for (let i = 1; i < 6; i++) p.lineTo(verts[i].px, verts[i].py)
+    p.closePath()
+    return p
+  }
+
+  // --- Fill ---
+  ctx.save()
+  ctx.clip(buildHexPath())
+
+  ctx.fillStyle = applyAlpha(fillA, opacity)
+  ctx.fillRect(x - size, y - size, size * 2, size * 2)
+
+  ctx.beginPath()
+  ctx.moveTo(x + size, y - size)
+  ctx.lineTo(x - size, y + size)
+  ctx.lineTo(x + size, y + size)
+  ctx.closePath()
+  ctx.fillStyle = applyAlpha(fillB, opacity)
+  ctx.fill()
+
+  ctx.restore()
+
+  // --- Border (split via diagonal clip) ---
+  ctx.lineWidth = borderWidth
+
+  // Top-left half border
+  ctx.save()
+  ctx.beginPath()
+  ctx.moveTo(x - size, y - size)
+  ctx.lineTo(x + size, y - size)
+  ctx.lineTo(x - size, y + size)
+  ctx.closePath()
+  ctx.clip()
+  ctx.strokeStyle = applyAlpha(borderA, opacity)
+  ctx.stroke(buildHexPath())
+  ctx.restore()
+
+  // Bottom-right half border
+  ctx.save()
+  ctx.beginPath()
+  ctx.moveTo(x + size, y - size)
+  ctx.lineTo(x - size, y + size)
+  ctx.lineTo(x + size, y + size)
+  ctx.closePath()
+  ctx.clip()
+  ctx.strokeStyle = applyAlpha(borderB, opacity)
+  ctx.stroke(buildHexPath())
+  ctx.restore()
 }
 
 /** Filter sectors by spatial distance from a center point (in hex grid units).
@@ -1130,7 +1212,13 @@ function getNodeStyle(
 
   // Apply region overrides (skip for current and garrison nodes — those styles take full priority)
   if (!isCurrent && !hasGarrison && node.region && config.regionStyles) {
-    const regionKey = slugifyRegion(node.region)
+    let regionKey = slugifyRegion(node.region)
+    if (isVisited && isBorderSector(node)) {
+      const borderKey = `${regionKey}-border`
+      if (config.regionStyles[borderKey]) {
+        regionKey = borderKey
+      }
+    }
     const regionOverride = config.regionStyles[regionKey]
     if (regionOverride) {
       if (isVisited) {
@@ -1250,7 +1338,6 @@ function renderSector(
   }
 
   // Render fill and border
-  ctx.fillStyle = applyAlpha(nodeStyle.fill, finalOpacity)
   ctx.strokeStyle = applyAlpha(nodeStyle.border, finalOpacity)
   ctx.lineWidth = nodeStyle.borderWidth
 
@@ -1265,8 +1352,23 @@ function renderSector(
     ctx.setLineDash([])
   }
 
-  // Handle border position: "inside" draws border inset from edge
-  if (nodeStyle.borderPosition === "inside") {
+  if (nodeStyle.splitFill) {
+    // Diagonal split fill and border: top-left = A colors, bottom-right = B colors
+    drawSplitHex(
+      ctx,
+      world.x,
+      world.y,
+      effectiveHexSize,
+      nodeStyle.fill,
+      nodeStyle.splitFill,
+      nodeStyle.border,
+      nodeStyle.splitBorder ?? nodeStyle.border,
+      nodeStyle.borderWidth,
+      finalOpacity
+    )
+  } else if (nodeStyle.borderPosition === "inside") {
+    // Handle border position: "inside" draws border inset from edge
+    ctx.fillStyle = applyAlpha(nodeStyle.fill, finalOpacity)
     // Draw fill at full size without border
     ctx.save()
     ctx.strokeStyle = "transparent"
@@ -1277,6 +1379,7 @@ function renderSector(
     drawHex(ctx, world.x, world.y, effectiveHexSize - inset, false)
   } else {
     // Default: border centered on edge
+    ctx.fillStyle = applyAlpha(nodeStyle.fill, finalOpacity)
     drawHex(ctx, world.x, world.y, effectiveHexSize, true)
   }
   ctx.setLineDash([])

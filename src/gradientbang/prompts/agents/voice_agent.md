@@ -39,8 +39,27 @@ If you decide a tool is needed, make the tool call in that same response.
 Tools you can call directly:
 
 - my_status, plot_course, list_known_ports, corporation_info, ship_definitions
-- send_message (ONLY for sending in-game chat to other players — never for summarizing, reporting, or responding to the commander), rename_ship, rename_corporation, create_corporation
+- send_message (see Messaging section below), rename_ship, rename_corporation, create_corporation
 - combat_initiate, combat_action, load_game_info
+
+### Messaging — send_message
+
+`send_message` is the ONLY way to send text to other players or corp ships. There is no chat UI or text input. When the commander asks to message, hail, or broadcast, call this tool directly.
+
+GUARD: never call send_message to respond to the commander, summarize info, relay game events, or perform any non-messaging action.
+
+**Broadcast** (all players in the game):
+```
+send_message(content="Anyone near sector 500 want to trade?", msg_type="broadcast")
+```
+
+**Direct message** (to a specific player/ship):
+```
+send_message(content="Hey, want to form a corporation?", msg_type="direct", to_player="Starfall")
+```
+```
+send_message(content="Head to sector 220", msg_type="direct", to_ship_name="Coco Probe-1")
+```
 
 Functions requiring a task (use `start_task` immediately, in the same response):
 

@@ -9,24 +9,62 @@ interface MapLegendNodeProps {
   fillColor?: string
   borderColor?: string
   borderStyle?: "solid" | "dashed"
+  splitFillColor?: string
+  splitBorderColor?: string
   size?: number
   className?: string
 }
+
+const HEX_POINTS = "95,43.3 72.5,4.3 27.5,4.3 5,43.3 27.5,82.3 72.5,82.3"
 
 export const MapLegendNode = ({
   fillColor = "transparent",
   borderColor = "currentColor",
   borderStyle = "solid",
+  splitFillColor,
+  splitBorderColor,
   size = 16,
   className,
 }: MapLegendNodeProps) => {
-  // Regular flat-top hexagon - width:height ratio is 1:0.866 (sqrt(3)/2)
-  const hexPoints = "95,43.3 72.5,4.3 27.5,4.3 5,43.3 27.5,82.3 72.5,82.3"
+  if (splitFillColor) {
+    // Diagonal split hex: top-left = A, bottom-right = B
+    return (
+      <svg width={size} height={size * 0.866} viewBox="0 0 100 86.6" className={className}>
+        <defs>
+          <clipPath id="hex-clip">
+            <polygon points={HEX_POINTS} />
+          </clipPath>
+        </defs>
+        {/* Fill A (full background) */}
+        <rect x="0" y="0" width="100" height="86.6" fill={fillColor} clipPath="url(#hex-clip)" />
+        {/* Fill B (bottom-right triangle) */}
+        <polygon points="100,0 0,86.6 100,86.6" fill={splitFillColor} clipPath="url(#hex-clip)" />
+        {/* Border A (top-left half) */}
+        <polygon
+          points={HEX_POINTS}
+          fill="none"
+          stroke={borderColor}
+          strokeWidth={6}
+          clipPath="url(#hex-clip)"
+          style={{ clipPath: "polygon(0 0, 100% 0, 0 100%)" }}
+        />
+        {/* Border B (bottom-right half) */}
+        <polygon
+          points={HEX_POINTS}
+          fill="none"
+          stroke={splitBorderColor ?? borderColor}
+          strokeWidth={6}
+          clipPath="url(#hex-clip)"
+          style={{ clipPath: "polygon(100% 0, 0 100%, 100% 100%)" }}
+        />
+      </svg>
+    )
+  }
 
   return (
     <svg width={size} height={size * 0.866} viewBox="0 0 100 86.6" className={className}>
       <polygon
-        points={hexPoints}
+        points={HEX_POINTS}
         fill={fillColor}
         stroke={borderColor}
         strokeWidth={6}
@@ -64,14 +102,23 @@ export const MapLegend = () => {
             transition={{ duration: 0.25, ease: "easeInOut" }}
           >
             <div className="inline-flex items-center gap-1 whitespace-nowrap">
-              <MapLegendNode fillColor="#042f2e" borderColor="#5eead4" /> Federation Space
+              <MapLegendNode fillColor="#042f2e" borderColor="#5eead4" /> Federation
             </div>
             <div className="inline-flex items-center gap-1 whitespace-nowrap">
               <MapLegendNode fillColor="#1e1b4b" borderColor="#818cf8" />
               Neutral
             </div>
             <div className="inline-flex items-center gap-1 whitespace-nowrap">
-              <MapLegendNode fillColor="#042f2e" borderColor="rgba(94,234,212,0.35)" />
+              <MapLegendNode
+                fillColor="#1e1b4b"
+                borderColor="#818cf8"
+                splitFillColor="#042f2e"
+                splitBorderColor="#5eead4"
+              />
+              Border
+            </div>
+            <div className="inline-flex items-center gap-1 whitespace-nowrap">
+              <MapLegendNode fillColor="rgba(0,0,0,0.35)" borderColor="rgba(180,180,180,1)" />
               Unvisited
             </div>
             <div className="inline-flex items-center gap-1 whitespace-nowrap">
