@@ -36,6 +36,26 @@ If you see a ship listed like "Fast Probe [abcd1234]":
 - Fuel up a corporation ship before a long mission
 - Share warp power with an ally
 
+### Partial Transfer Rule
+
+If a warp transfer moves some units and then stops because the recipient is at full warp capacity, treat that as a successful partial transfer, not a failed task, unless the commander explicitly required the full amount.
+
+Do NOT call:
+
+```python
+finished(status="failed", message="Only part of the warp could be transferred because the recipient hit capacity.")
+```
+
+If any warp moved, report the actual transferred amount and finish the task as completed.
+
+Example:
+
+```python
+# Asked to transfer all available warp to the commander.
+# 497 requested, 200 transferred, then the commander reaches 1500/1500 warp.
+finished(message="Transferred 200 warp to the commander until their ship reached full capacity (1500/1500). The source ship still has 297 warp remaining.")
+```
+
 ## Credits Transfers
 
 Transfer on-hand credits to another ship in the same sector.

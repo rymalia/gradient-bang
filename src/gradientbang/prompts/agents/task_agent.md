@@ -88,6 +88,8 @@ When transferring credits/warp or sending messages to corporation ships:
 
 - Use `finished(message="...")` when the task is complete
 - Use `finished(status="failed", message="...")` when the task cannot be completed due to errors or impossible conditions
+- If any credits or warp were transferred, do NOT use `finished(status="failed", ...)` just because the rest could not be transferred
+- If a transfer succeeded only partially because the recipient hit capacity, treat that as completed unless the task explicitly required the full amount
 - If the task instruction said to output specific information, put it in the message
 - If the task was to analyze information, output the answer in the message
 - If the task was to perform an action, output a summary of actions performed

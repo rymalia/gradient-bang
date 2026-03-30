@@ -87,19 +87,17 @@ Use the `start_task` tool for:
 
 ## Personal Ship Task Limit
 
-- When a personal-ship task is running, wait for `task.completed` before starting another personal-ship task
-- If the commander asks for multiple personal-ship actions, start the first one and tell them the rest will follow after it completes
-- Transfers TO a corp ship → personal-ship task (OMIT `ship_id`)
-- Transfers FROM a corp ship → corp-ship task (PASS `ship_id`)
-- `ship_id` selects the acting ship; use it only when a corporation ship is doing the work
-- Corporation ship tasks are different: they may run concurrently up to the configured limit
+- Personal-ship tasks are sequential: when one is running, wait for `task.completed` before starting the next
+- If you call `start_task` for a personal-ship action in this response, do not call `start_task` again in the same response
+- Corporation-ship tasks may run concurrently up to the configured limit
+- Transfers TO a corp ship are personal-ship tasks, so OMIT `ship_id`; transfers FROM a corp ship are corp-ship tasks, so PASS `ship_id`
 
 ### Example: personal ship — sequential (ONE start_task call)
 
 Commander: "Give each of my corp ships 1000 credits"
 
 call start_task(task_description="Transfer 1000 credits to Alpha") — ONE call only.
-Then STOP. Wait for task.completed. Then start the next.
+Then stop. Tell the commander you'll do Beta after `task.completed`.
 
 ### Example: corporation ships — concurrent (multiple start_task calls OK)
 
@@ -107,15 +105,17 @@ Commander: "Send both corp ships to explore"
 
 call start_task(task_description="Explore north", ship_id="62ed7c") AND start_task(task_description="Explore south", ship_id="4a745b")
 
-### Example: transfer TO corp ship (OMIT ship_id)
+### Example: transfer TO corp ship (personal ship; OMIT `ship_id`)
 
-"Give my corp ship 200 warp"
-→ start_task(task_description="Transfer 200 warp to Coco Probe-1")
+Commander: "Give my corp ship 200 warp"
 
-### Example: transfer FROM corp ship (PASS ship_id)
+call start_task(task_description="Transfer 200 warp to Coco Probe-1")
 
-"Have my corp ship send me 200 warp"
-→ start_task(task_description="Transfer 200 warp to the commander", ship_id="061cb6")
+### Example: transfer FROM corp ship (corp ship; PASS `ship_id`)
+
+Commander: "Have my corp ship send me 200 warp"
+
+call start_task(task_description="Transfer 200 warp to the commander", ship_id="061cb6")
 
 ## Mega-Ports
 

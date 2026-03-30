@@ -1,6 +1,6 @@
 import { useRef, useState } from "react"
 
-import { CircleNotchIcon, ShieldIcon } from "@phosphor-icons/react"
+import { BuildingsIcon, CircleNotchIcon, ShieldIcon, SwapIcon } from "@phosphor-icons/react"
 
 import ImageAegisCruiser from "@/assets/images/ships/aegis_cruiser.png"
 import ImageAtlasHauler from "@/assets/images/ships/atlas_hauler.png"
@@ -18,6 +18,7 @@ import ImageWayfarerFreighter from "@/assets/images/ships/wayfarer_freighter.png
 import { DottedTitle } from "@/components/DottedTitle"
 import { Badge } from "@/components/primitives/Badge"
 import { Button } from "@/components/primitives/Button"
+import { ButtonGroup } from "@/components/primitives/ButtonGroup"
 import { Card, CardContent } from "@/components/primitives/Card"
 import { Divider } from "@/components/primitives/Divider"
 import {
@@ -100,8 +101,11 @@ export const ShipDetails = () => {
   const personalShips = allShips.filter((s) => s.owner_type === "personal")
   const corpShips = allShips.filter((s) => s.owner_type === "corporation")
 
+  const corporation = useGameStore.use.corporation?.()
+
   const defaultShipId = playerShip?.ship_id ?? ""
   const [selectedShipId, setSelectedShipId] = useState(defaultShipId)
+  const [purchaseMode, setPurchaseMode] = useState<"exchange" | "corp_purchase">("exchange")
 
   const selectedShip = [playerShip, ...allShips].find((s) => s?.ship_id === selectedShipId)
 
@@ -198,15 +202,30 @@ export const ShipDetails = () => {
                   </ul>
                 </div>
                 <div>
+                  <DottedTitle title="Trade-In Value" className="py-ui-sm" />
+                  <Badge
+                    variant="secondary"
+                    border="bracket"
+                    className="flex-1 bracket-offset-1 flex flex-row gap-2 items-center justify-between"
+                  >
+                    <SwapIcon weight="duotone" className="size-5" />
+                    <span className="text-subtle-foreground">
+                      {formatCurrency(
+                        (ship.stats as unknown as { trade_in_value: number }).trade_in_value,
+                        "standard"
+                      )}{" "}
+                      CR
+                    </span>
+                  </Badge>
                   <DottedTitle title="Purchase Price" className="py-ui-sm" />
                   <Badge
                     variant="secondary"
                     border="bracket"
-                    className="flex-1 bracket-offset-1 flex flex-row gap-2 items-center justify-between flex-1text-center"
+                    className="flex-1 bracket-offset-1 flex flex-row gap-2 items-center justify-between"
                   >
                     <CreditsIcon weight="duotone" className="size-5" />
-                    <span className=" text-terminal-foreground">
-                      {formatCurrency(ship.purchase_price, "standard")}
+                    <span className="font-bold text-terminal-foreground">
+                      {formatCurrency(ship.purchase_price, "standard")} CR
                     </span>
                   </Badge>
                 </div>
@@ -222,55 +241,100 @@ export const ShipDetails = () => {
               <CardContent>
                 <DottedTitle title={"Purchase " + ship.display_name} textColor="text-terminal" />
               </CardContent>
-              <CardContent className="flex flex-row flex-1 gap-ui-md">
-                <Select value={selectedShipId} onValueChange={setSelectedShipId}>
-                  <SelectTrigger className="flex-1">
-                    <SelectValue placeholder="Select ship to trade-in" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {personalShips.length > 0 && (
-                      <SelectGroup>
-                        <SelectLabel>Your Ships</SelectLabel>
-                        {personalShips.map((s) => (
-                          <SelectItem key={s.ship_id} value={s.ship_id}>
-                            {s.ship_name} ({shipTypeVerbose(s.ship_type)})
-                          </SelectItem>
-                        ))}
-                      </SelectGroup>
-                    )}
-                    {personalShips.length > 0 && corpShips.length > 0 && <SelectSeparator />}
-                    {corpShips.length > 0 && (
-                      <SelectGroup>
-                        <SelectLabel>Corporation Ships</SelectLabel>
-                        {corpShips.map((s) => (
-                          <SelectItem key={s.ship_id} value={s.ship_id}>
-                            {s.ship_name} ({shipTypeVerbose(s.ship_type)})
-                          </SelectItem>
-                        ))}
-                      </SelectGroup>
-                    )}
-                  </SelectContent>
-                </Select>
-                <Button
-                  onClick={() => {
-                    const replaceName = selectedShip?.ship_name ?? "my ship"
-                    const replaceId = selectedShip?.ship_id ?? ""
-                    sendUserTextInput(
-                      `I'd like to purchase a ${ship.display_name} to replace ${replaceName} (ship ID: ${replaceId})`
-                    )
-                    setActiveModal(undefined)
-                  }}
-                  disabled={!isMegaPort || !selectedShipId}
-                  className={`min-w-64 ${
-                    !isMegaPort ?
-                      "relative after:content-[''] after:absolute after:inset-0 after:bg-stripes-sm after:bg-stripes-border"
-                    : ""
-                  }`}
-                >
-                  <span className={isMegaPort ? "" : "relative z-10 text-foreground"}>
-                    {isMegaPort ? "Request to buy" : "Must be at Mega-Port"}
-                  </span>
-                </Button>
+              <CardContent className="flex flex-col gap-ui-md">
+                <ButtonGroup>
+                  <Button
+                    variant={purchaseMode === "exchange" ? "default" : "secondary"}
+                    size="sm"
+                    onClick={() => setPurchaseMode("exchange")}
+                  >
+                    <SwapIcon weight="duotone" className="size-4" />
+                    Exchange ship
+                  </Button>
+                  <Button
+                    variant={purchaseMode === "corp_purchase" ? "default" : "secondary"}
+                    size="sm"
+                    onClick={() => corporation && setPurchaseMode("corp_purchase")}
+                    disabled={!corporation}
+                  >
+                    <BuildingsIcon weight="duotone" className="size-4" />
+                    {corporation ? "Purchase as corporation ship" : "Not in corporation"}
+                  </Button>
+                </ButtonGroup>
+                {purchaseMode === "exchange" && (
+                  <div className="flex flex-row flex-1 gap-ui-md">
+                    <Select value={selectedShipId} onValueChange={setSelectedShipId}>
+                      <SelectTrigger className="flex-1">
+                        <SelectValue placeholder="Select ship to trade-in" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {personalShips.length > 0 && (
+                          <SelectGroup>
+                            <SelectLabel>Your Ships</SelectLabel>
+                            {personalShips.map((s) => (
+                              <SelectItem key={s.ship_id} value={s.ship_id}>
+                                {s.ship_name} ({shipTypeVerbose(s.ship_type)})
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        )}
+                        {personalShips.length > 0 && corpShips.length > 0 && <SelectSeparator />}
+                        {corpShips.length > 0 && (
+                          <SelectGroup>
+                            <SelectLabel>Corporation Ships</SelectLabel>
+                            {corpShips.map((s) => (
+                              <SelectItem key={s.ship_id} value={s.ship_id}>
+                                {s.ship_name} ({shipTypeVerbose(s.ship_type)})
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        )}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      onClick={() => {
+                        const replaceName = selectedShip?.ship_name ?? "my ship"
+                        const replaceId = selectedShip?.ship_id ?? ""
+                        sendUserTextInput(
+                          `I'd like to purchase a ${ship.display_name} to replace ${replaceName} (ship ID: ${replaceId})`
+                        )
+                        setActiveModal(undefined)
+                      }}
+                      disabled={!isMegaPort || !selectedShipId}
+                      className={`min-w-64 ${
+                        !isMegaPort ?
+                          "relative after:content-[''] after:absolute after:inset-0 after:bg-stripes-sm after:bg-stripes-border"
+                        : ""
+                      }`}
+                    >
+                      <span className={isMegaPort ? "" : "relative z-10 text-foreground"}>
+                        {isMegaPort ? "Request to buy" : "Must be at Mega-Port"}
+                      </span>
+                    </Button>
+                  </div>
+                )}
+                {purchaseMode === "corp_purchase" && (
+                  <div className="flex flex-row flex-1 gap-ui-md">
+                    <Button
+                      onClick={() => {
+                        sendUserTextInput(
+                          `I'd like to purchase a ${ship.display_name} as a new corporation ship`
+                        )
+                        setActiveModal(undefined)
+                      }}
+                      disabled={!isMegaPort}
+                      className={`flex-1 ${
+                        !isMegaPort ?
+                          "relative after:content-[''] after:absolute after:inset-0 after:bg-stripes-sm after:bg-stripes-border"
+                        : ""
+                      }`}
+                    >
+                      <span className={isMegaPort ? "" : "relative z-10 text-foreground"}>
+                        {isMegaPort ? "Purchase for corporation" : "Must be at Mega-Port"}
+                      </span>
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>

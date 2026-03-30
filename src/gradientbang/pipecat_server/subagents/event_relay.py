@@ -326,7 +326,11 @@ EVENT_CONFIGS: dict[str, EventConfig] = {
         voice_summary=_summarize_combat_action,
     ),
     # Task lifecycle
-    "task.start": EventConfig(append=AppendRule.OWNED_TASK, task_scoped_allowlisted=True),
+    # VoiceAgent injects a synthetic task.started event after successful
+    # start_task. Appending the framework's task.start as a second startup
+    # event gives the LLM two different task ids for the same launch and
+    # often produces duplicate acknowledgements.
+    "task.start": EventConfig(append=AppendRule.NEVER),
     # Bus protocol (on_task_response) already injects task.completed into the
     # voice LLM. Keeping task.finish in the voice context as a second copy of
     # the same completion summary makes the assistant repeat itself, so route it

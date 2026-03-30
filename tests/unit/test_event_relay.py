@@ -934,7 +934,7 @@ class TestAppendRuleOwnedTask:
         )
         await relay._relay_event(event)
         assert mock_rtvi.push_frame.call_count == 1
-        assert len(task_state.deferred_events) == 1
+        assert len(task_state.deferred_events) == 0
 
     async def test_not_appended_when_not_our_task(self):
         relay, task_state, _, mock_rtvi = _make_relay()
@@ -1337,9 +1337,7 @@ class TestXmlFormat:
             },
         )
         await relay._relay_event(event)
-        assert len(task_state.deferred_events) == 1
-        content, _ = task_state.deferred_events[0]
-        assert 'task_id="task-abc"' in content
+        assert task_state.deferred_events == []
 
     async def test_combat_id_in_xml(self):
         relay, task_state, _, _ = _make_relay()

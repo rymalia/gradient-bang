@@ -254,7 +254,9 @@ TRANSFER_WARP_POWER = FunctionSchema(
         "to_player_name, to_ship_id, or to_ship_name. For corporation ships, "
         "use corporation_info to find the ship_id. to_ship_id accepts a full UUID "
         "or a 6-8 hex prefix (unique in the current sector). If you see a name like "
-        "'Fast Probe [abcd1234]', the bracket suffix is just a short id."
+        "'Fast Probe [abcd1234]', the bracket suffix is just a short id. If the "
+        "recipient reaches full warp capacity mid-transfer, the event may reflect a "
+        "successful partial transfer rather than a total failure."
     ),
     properties={
         "to_player_name": {

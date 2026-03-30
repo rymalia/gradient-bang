@@ -1257,7 +1257,6 @@ class VoiceAgent(LLMAgent):
         # immediately without calling the handler — nudge the LLM to wait.
         ship_id = (params.arguments or {}).get("ship_id")
         if not ship_id and self._has_active_player_task():
-            self._begin_assistant_response_cycle()
             await params.result_callback(
                 {
                     "error": (
@@ -1266,8 +1265,15 @@ class VoiceAgent(LLMAgent):
                         "Tell the commander you will handle it after the current task finishes."
                     )
                 },
-                properties=FunctionCallResultProperties(run_llm=True),
+                properties=FunctionCallResultProperties(run_llm=False),
             )
+            event_xml = (
+                '<event name="task.start_blocked" task_type="player_ship">\n'
+                "Personal ship task already running. Handle the next personal-ship action "
+                "after the current task finishes.\n"
+                "</event>"
+            )
+            await self._inject_context([{"role": "user", "content": event_xml}], run_llm=True)
             return
 
         result = await self._handle_start_task(params)
