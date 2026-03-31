@@ -891,13 +891,9 @@ COMBAT_ACTION = FunctionSchema(
 SEND_MESSAGE = FunctionSchema(
     name="send_message",
     description=(
-        "Send an in-game chat message to OTHER PLAYERS (broadcast or direct). "
-        "This tool is the ONLY way to send text messages — there is no chat UI, "
-        "no text input panel, and no other messaging mechanism. When the commander "
-        "asks to message, hail, or contact another player or ship, you MUST call "
-        "this tool. "
-        "GUARD: never use this to respond to the commander, summarize information, "
-        "relay system/game events, or perform non-messaging actions. "
+        "Send an in-game message to another player. "
+        "ONLY use when the commander explicitly asks to send a message, hail, or broadcast to another player. "
+        "NEVER use to answer questions, check status, relay events, or respond to the commander. "
         "For direct messages, target by character name, ship name, or ship_id. "
         "to_ship_id accepts a full UUID or a 6-8 hex prefix."
     ),
@@ -909,8 +905,7 @@ SEND_MESSAGE = FunctionSchema(
         "msg_type": {
             "type": "string",
             "enum": ["broadcast", "direct"],
-            "description": "Message type",
-            "default": "broadcast",
+            "description": "broadcast = visible to ALL players; direct = private to one player",
         },
         "to_player": {
             "type": "string",
