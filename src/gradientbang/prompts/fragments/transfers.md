@@ -140,7 +140,15 @@ Pulls savings back onto your ship. Corporation ships cannot withdraw from bank a
 - Bank credits are safe from tolls and combat
 - Must physically be at a mega-port to use the bank
 - Grab a fresh status.snapshot before depositing to confirm balances
-- Total purchasing power = on-hand credits + bank balance (withdrawal required first)
+- Bank balance and credits on hand are different pools
+- Bank balance does NOT auto-spend for actions that require credits on hand
+- If an action needs credits on hand, withdraw first
+
+Example:
+```
+"Can I buy that with banked credits?"
+→ If the purchase needs credits on hand, call bank_withdraw(...) first.
+```
 
 ## Requirements
 

@@ -90,8 +90,17 @@ purchase_ship(
 )
 ```
 
-- Draws from corporation bank credits
+- Uses bank balance, not credits on hand
 - Can optionally seed initial ship credits
+
+Example:
+```
+purchase_ship(
+    ship_type="autonomous_light_hauler",
+    expected_price=5000,
+    purchase_type="corporation"
+)
+```
 
 ## Renaming a Corporation
 
