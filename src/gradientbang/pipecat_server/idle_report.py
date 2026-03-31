@@ -74,9 +74,10 @@ class IdleReportProcessor(FrameProcessor):
 
         # Activity detection.
         if self._is_user_activity(frame):
-            # User activity ALWAYS resets, even during our own report speech.
+            # User activity cancels timer and resets cooldown.
+            # Timer only restarts when bot next finishes speaking.
             self._clear_report_in_flight()
-            self._start_timer(self._idle_seconds)
+            self._cancel_timer()
         elif isinstance(frame, BotStoppedSpeakingFrame):
             if self._report_in_flight:
                 # Our report speech finished — start cooldown + idle timer.

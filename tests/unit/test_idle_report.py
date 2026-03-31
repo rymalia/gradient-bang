@@ -90,24 +90,29 @@ class TestIdleReportProcessor:
         await asyncio.sleep(0.2)
         assert cb.call_count == 2
 
-    async def test_user_activity_resets_timer(self):
-        """User speaking resets the idle timer."""
+    async def test_user_speaking_cancels_timer(self):
+        """User speaking cancels timer. Only bot stop restarts it."""
         cb = AsyncMock(return_value=True)
         proc = _make_processor(idle_seconds=0.1, on_idle=cb)
 
         await _send(proc, BotStoppedSpeakingFrame())
 
-        # Wait almost long enough, then user speaks.
+        # User speaks — cancels timer.
         await asyncio.sleep(0.07)
         await _send(proc, UserStartedSpeakingFrame())
+
+        # Wait well past idle — should NOT fire (cancelled, not restarted).
+        await asyncio.sleep(0.2)
         cb.assert_not_called()
 
-        # Timer restarted — wait another full idle period.
+        # Bot responds and finishes — NOW timer starts.
+        await _send(proc, BotStartedSpeakingFrame())
+        await _send(proc, BotStoppedSpeakingFrame())
         await asyncio.sleep(0.15)
         cb.assert_called_once()
 
-    async def test_user_text_input_resets_timer(self):
-        """Text input resets the idle timer."""
+    async def test_user_text_input_cancels_timer(self):
+        """Text input cancels timer. Only bot stop restarts it."""
         cb = AsyncMock(return_value=True)
         proc = _make_processor(idle_seconds=0.1, on_idle=cb)
 
@@ -115,8 +120,14 @@ class TestIdleReportProcessor:
 
         await asyncio.sleep(0.07)
         await _send(proc, UserTextInputFrame(text="hello"))
+
+        # Wait well past idle — should NOT fire.
+        await asyncio.sleep(0.2)
         cb.assert_not_called()
 
+        # Bot responds and finishes — NOW timer starts.
+        await _send(proc, BotStartedSpeakingFrame())
+        await _send(proc, BotStoppedSpeakingFrame())
         await asyncio.sleep(0.15)
         cb.assert_called_once()
 
@@ -181,8 +192,8 @@ class TestIdleReportProcessor:
         await asyncio.sleep(0.08)
         assert cb.call_count == 1
 
-    async def test_user_interruption_during_report_resets(self):
-        """User speaking during report clears report_in_flight and resets."""
+    async def test_user_interruption_during_report_clears_cooldown(self):
+        """User speaking during report clears cooldown. Timer restarts on next bot stop."""
         cb = AsyncMock(return_value=True)
         proc = _make_processor(idle_seconds=0.05, cooldown_seconds=0.5, on_idle=cb)
 
@@ -192,10 +203,16 @@ class TestIdleReportProcessor:
         await asyncio.sleep(0.08)
         assert cb.call_count == 1
 
-        # User interrupts during report speech.
+        # User interrupts during report speech — cancels timer, clears cooldown.
         await _send(proc, UserStartedSpeakingFrame())
 
-        # Cooldown should be cleared. After idle_seconds, another report fires.
+        # Timer does NOT restart until bot speaks again.
+        await asyncio.sleep(0.1)
+        assert cb.call_count == 1
+
+        # Bot responds to user and finishes — idle timer starts fresh, no cooldown.
+        await _send(proc, BotStartedSpeakingFrame())
+        await _send(proc, BotStoppedSpeakingFrame())
         await asyncio.sleep(0.08)
         assert cb.call_count == 2
 
