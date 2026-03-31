@@ -471,18 +471,10 @@ class ClientMessageHandler:
             )
 
     async def _handle_dump_llm_context(self, msg_type, msg_data):
-        """Debug: dump the current LLM context back to the client."""
+        """Debug: dump voice agent context + all task agent contexts."""
         import json
 
-        if not self._llm_context:
-            await self._rtvi.push_frame(
-                RTVIServerMessageFrame(
-                    {"frame_type": "error", "error": "LLM context not available"}
-                )
-            )
-            return
-
-        messages = self._llm_context.get_messages()
+        from gradientbang.pipecat_server.subagents.task_agent import TaskAgent
 
         def safe_serialize(msg):
             try:
@@ -491,12 +483,47 @@ class ClientMessageHandler:
             except (TypeError, ValueError):
                 return {"role": msg.get("role", "unknown"), "content": str(msg.get("content", ""))}
 
-        safe_messages = [safe_serialize(m) for m in messages]
+        sections = []
 
-        # Pre-format as indented JSON so the client can copy readable text.
-        # Unescape \n inside strings so long content fields are readable.
-        formatted = json.dumps(safe_messages, indent=2, ensure_ascii=False)
-        formatted = formatted.replace("\\n", "\n")
+        # Voice agent context
+        if self._llm_context:
+            voice_messages = [safe_serialize(m) for m in self._llm_context.get_messages()]
+            voice_json = json.dumps(voice_messages, indent=2, ensure_ascii=False).replace("\\n", "\n")
+            sections.append(
+                f"{'=' * 60}\n"
+                f"  VOICE AGENT CONTEXT ({len(voice_messages)} messages)\n"
+                f"{'=' * 60}\n\n"
+                f"{voice_json}"
+            )
+
+        # Task agent contexts
+        if self._voice_agent:
+            for child in self._voice_agent.children:
+                if not isinstance(child, TaskAgent):
+                    continue
+                messages = child.get_context_dump()
+                if not messages:
+                    continue
+                safe_messages = [safe_serialize(m) for m in messages]
+                task_json = json.dumps(safe_messages, indent=2, ensure_ascii=False).replace("\\n", "\n")
+                task_label = child._active_task_id or child.name
+                task_type = "corp_ship" if child._is_corp_ship else "player_ship"
+                sections.append(
+                    f"{'=' * 60}\n"
+                    f"  TASK AGENT: {child.name} ({task_type}) — {task_label}\n"
+                    f"{'=' * 60}\n\n"
+                    f"{task_json}"
+                )
+
+        if not sections:
+            await self._rtvi.push_frame(
+                RTVIServerMessageFrame(
+                    {"frame_type": "error", "error": "No context available"}
+                )
+            )
+            return
+
+        formatted = "\n\n".join(sections)
 
         await self._rtvi.push_frame(
             RTVIServerMessageFrame(
@@ -504,7 +531,7 @@ class ClientMessageHandler:
                     "frame_type": "event",
                     "event": "debug.llm-context",
                     "payload": {
-                        "message_count": len(safe_messages),
+                        "message_count": len(sections),
                         "formatted": formatted,
                     },
                 }
