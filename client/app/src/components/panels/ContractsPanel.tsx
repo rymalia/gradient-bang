@@ -1,3 +1,5 @@
+import { useState } from "react"
+
 import { CheckerboardIcon, CheckIcon } from "@phosphor-icons/react"
 
 import { BlankSlateTile } from "@/components/BlankSlates"
@@ -67,6 +69,8 @@ const ContractStepRow = ({
   const setActiveModal = useGameStore.use.setActiveModal()
   const dispatchAction = useGameStore.use.dispatchAction()
 
+  const [claiming, setClaiming] = useState(false)
+
   const hasCodec = !!step.meta?.codec
   const progress =
     step.target_value > 0 ? Math.min(100, (step.current_value / step.target_value) * 100) : 0
@@ -83,6 +87,7 @@ const ContractStepRow = ({
   }
 
   function claimReward() {
+    setClaiming(true)
     dispatchAction({
       type: "claim-step-reward",
       payload: { quest_id: step.quest_id, step_id: step.step_id },
@@ -121,6 +126,8 @@ const ContractStepRow = ({
           <Button
             size="ui"
             variant="ghost"
+            loader="icon"
+            isLoading={claiming}
             onClick={(e) => {
               e.stopPropagation()
               claimReward()
