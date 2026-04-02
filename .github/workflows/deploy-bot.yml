@@ -25,7 +25,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install Pipecat CLI
-        run: pip install pipecatcloud==0.4.1
+        run: pip install pipecat-ai-cli==0.3.2 pipecatcloud==0.4.1
 
       - name: Authenticate with Pipecat Cloud
         run: pipecat cloud auth login --token "${{ secrets.PCC_PAT }}"
