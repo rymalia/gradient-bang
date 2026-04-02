@@ -19,6 +19,7 @@ class TaskOutputType(Enum):
     INPUT = "INPUT"
     EVENT = "EVENT"
     MESSAGE = "MESSAGE"
+    THINKING = "THINKING"
     ERROR = "ERROR"
     FINISHED = "FINISHED"
 

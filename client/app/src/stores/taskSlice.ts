@@ -31,6 +31,20 @@ export const createTaskSlice: StateCreator<TaskSlice> = (set, get) => ({
   addTaskOutput: (taskOutput: TaskOutput) =>
     set((state) => {
       const existing = state.taskOutputs[taskOutput.task_id] ?? []
+
+      // Merge consecutive THINKING messages into a single entry
+      const incomingType = taskOutput.task_message_type.toUpperCase()
+      const lastType =
+        existing.length > 0 ? existing[existing.length - 1].task_message_type.toUpperCase() : ""
+      if (incomingType === "THINKING" && lastType === "THINKING") {
+        const merged = [...existing]
+        const last = merged[merged.length - 1]
+        merged[merged.length - 1] = { ...last, text: last.text + taskOutput.text }
+        return {
+          taskOutputs: { ...state.taskOutputs, [taskOutput.task_id]: merged },
+        }
+      }
+
       const updated = [...existing, taskOutput]
       return {
         taskOutputs: {

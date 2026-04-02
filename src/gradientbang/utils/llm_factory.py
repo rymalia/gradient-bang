@@ -361,38 +361,56 @@ def _get_system_cached_anthropic_cls():
     return _SystemCachedAnthropicLLMService
 
 
+def _map_thinking_budget_to_effort(budget: int) -> str:
+    """Map a thinking token budget to an OpenAI reasoning_effort level."""
+    if budget >= 16384:
+        return "high"
+    elif budget >= 4096:
+        return "medium"
+    else:
+        return "low"
+
+
 def _create_openai_service(
     api_key: str,
     model: str,
     thinking: Optional[UnifiedThinkingConfig],
     function_call_timeout_secs: Optional[float] = None,
 ) -> LLMService:
-    """Create OpenAI LLM service with optional reasoning_effort support."""
-    from pipecat.services.openai.llm import OpenAILLMService
+    """Create OpenAI LLM service with optional reasoning_effort support.
 
-    params_kwargs: dict = {}
-    if thinking and thinking.enabled:
-        # Map thinking budget to OpenAI reasoning_effort level
-        budget = thinking.budget_tokens
-        if budget >= 16384:
-            effort = "high"
-        elif budget >= 4096:
-            effort = "medium"
-        else:
-            effort = "low"
-        params_kwargs["extra"] = {"reasoning_effort": effort}
-        logger.info(f"OpenAI reasoning_effort={effort} for model {model} (budget={budget})")
-
-    params = OpenAILLMService.InputParams(**params_kwargs) if params_kwargs else None
-
-    llm_kwargs = {}
+    When thinking is enabled, uses the Responses API service which streams
+    reasoning summary text as LLMThoughtTextFrame. Otherwise falls back to
+    the standard Chat Completions API service.
+    """
+    llm_kwargs: dict = {}
     if function_call_timeout_secs is not None:
         llm_kwargs["function_call_timeout_secs"] = function_call_timeout_secs
+
+    if thinking and thinking.enabled:
+        from gradientbang.utils.openai_responses_llm import OpenAIResponsesLLMService
+
+        effort = _map_thinking_budget_to_effort(thinking.budget_tokens)
+        logger.info(
+            "OpenAI Responses API: reasoning_effort={}, summary=detailed "
+            "for model {} (budget={})",
+            effort,
+            model,
+            thinking.budget_tokens,
+        )
+        return OpenAIResponsesLLMService(
+            api_key=api_key,
+            model=model,
+            reasoning_effort=effort,
+            reasoning_summary="detailed",
+            **llm_kwargs,
+        )
+
+    from pipecat.services.openai.llm import OpenAILLMService
 
     return OpenAILLMService(
         api_key=api_key,
         model=model,
-        params=params,
         **llm_kwargs,
     )
 

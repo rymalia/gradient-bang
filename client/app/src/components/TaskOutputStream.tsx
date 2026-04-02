@@ -20,6 +20,8 @@ const TaskTypeBadge = ({ type }: { type: Task["type"] }) => {
         : type === "EVENT" ? "bg-terminal-background text-terminal"
         : type === "MESSAGE" ?
           "border border-accent-foreground/40 bg-accent-background text-accent-foreground"
+        : type === "THINKING" ?
+          "border border-muted-foreground/40 bg-subtle-background text-muted-foreground"
         : type === "STEP" ?
           "bg-subtle-background text-muted-foreground border border-subtle-foreground"
         : type === "COMPLETE" ? "border border-success bg-success-background text-success"
@@ -72,7 +74,8 @@ const TaskRow = memo(({ task, className }: { task: TaskOutput; className?: strin
             "normal-case flex-1 text-pretty",
             task.task_message_type === "ERROR" && "text-destructive-foreground",
             task.task_message_type === "STEP" && "text-accent-foreground",
-            task.task_message_type === "MESSAGE" && "text-accent-foreground italic"
+            task.task_message_type === "MESSAGE" && "text-accent-foreground italic",
+            task.task_message_type === "THINKING" && "text-muted-foreground italic"
           )}
         >
           {formatTaskSummary(task.task_message_type === "FAILED" ? "Task cancelled" : task.text)}

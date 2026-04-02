@@ -37,6 +37,8 @@ from pipecat.frames.frames import (
     LLMFullResponseStartFrame,
     LLMRunFrame,
     LLMTextFrame,
+    LLMThoughtEndFrame,
+    LLMThoughtStartFrame,
     LLMThoughtTextFrame,
 )
 from pipecat.pipeline.pipeline import Pipeline
@@ -130,7 +132,15 @@ SYNC_TOOL_EVENTS = {
 
 
 class _ResponseStateTracker(FrameProcessor):
-    """Monitors LLM response frames to control inference scheduling."""
+    """Monitors LLM response frames to control inference scheduling.
+
+    Streams thinking summary tokens to the client as THINKING output type
+    as they arrive, and accumulates regular text for output at response end.
+    """
+
+    # Thinking text is batched into chunks before output to avoid flooding
+    # the client with tiny per-token messages.
+    _THINKING_FLUSH_CHARS = 80
 
     def __init__(self, agent: TaskAgent):
         super().__init__()
@@ -138,27 +148,57 @@ class _ResponseStateTracker(FrameProcessor):
         self._has_function_calls = False
         self._has_text_output = False
         self._accumulated_text = ""
+        self._accumulated_thinking = ""
+        self._in_thinking = False
 
     def _reset_state(self):
         self._has_function_calls = False
         self._has_text_output = False
         self._accumulated_text = ""
+        self._accumulated_thinking = ""
+        self._in_thinking = False
+
+    def _flush_thinking(self) -> None:
+        """Output accumulated thinking text and clear the buffer."""
+        if self._accumulated_thinking:
+            self._agent._output(
+                self._accumulated_thinking, TaskOutputType.THINKING
+            )
+            self._accumulated_thinking = ""
 
     async def process_frame(self, frame: Any, direction: FrameDirection):
         await super().process_frame(frame, direction)
 
         if isinstance(frame, LLMFullResponseStartFrame):
             self._reset_state()
+            self._agent._inference_response_started()
+        elif isinstance(frame, LLMThoughtStartFrame):
+            self._in_thinking = True
+            self._agent._inference_thinking_started()
+        elif isinstance(frame, LLMThoughtTextFrame):
+            self._has_text_output = True
+            self._accumulated_thinking += frame.text
+            # Flush in chunks for readable client display
+            if len(self._accumulated_thinking) >= self._THINKING_FLUSH_CHARS:
+                self._flush_thinking()
+        elif isinstance(frame, LLMThoughtEndFrame):
+            self._flush_thinking()
+            self._in_thinking = False
         elif isinstance(frame, LLMTextFrame):
             self._has_text_output = True
             self._accumulated_text += frame.text
-        elif isinstance(frame, LLMThoughtTextFrame):
-            self._has_text_output = True
-            self._accumulated_text += frame.text
+            if self._in_thinking:
+                self._flush_thinking()
+                self._in_thinking = False
         elif isinstance(frame, (FunctionCallsStartedFrame, FunctionCallInProgressFrame)):
             self._has_function_calls = True
+            if self._in_thinking:
+                self._flush_thinking()
+                self._in_thinking = False
         elif isinstance(frame, LLMFullResponseEndFrame):
+            self._flush_thinking()
             self._agent._llm_inflight = False
+            self._agent._inference_response_ended()
             await self._handle_response_end()
 
         await self.push_frame(frame, direction)
@@ -231,6 +271,10 @@ class TaskAgent(LLMAgent):
         self._task_output_progress_epoch: int = 0
         self._last_synthetic_progress_message: Optional[str] = None
         self._last_synthetic_progress_epoch: int = -1
+
+        # ── Inference timing (for detailed logging) ──
+        self._inference_dispatch_time: Optional[float] = None
+        self._inference_thinking_time: Optional[float] = None
 
         # ── Task log ──
         self._task_log: List[str] = []
@@ -887,6 +931,46 @@ class TaskAgent(LLMAgent):
             )
         return "Task stopped due to an internal processing error."
 
+    # ── Inference timing callbacks (called by _ResponseStateTracker) ──
+
+    def _inference_response_started(self) -> None:
+        """Called when LLMFullResponseStartFrame arrives (API call returned first chunk)."""
+        if self._inference_dispatch_time is not None:
+            elapsed = time.perf_counter() - self._inference_dispatch_time
+            logger.info(
+                "TaskAgent '{}': LLM response started {:.3f}s after dispatch",
+                self.name,
+                elapsed,
+            )
+
+    def _inference_thinking_started(self) -> None:
+        """Called when LLMThoughtStartFrame arrives (first thinking token)."""
+        self._inference_thinking_time = time.perf_counter()
+        if self._inference_dispatch_time is not None:
+            elapsed = self._inference_thinking_time - self._inference_dispatch_time
+            logger.info(
+                "TaskAgent '{}': thinking started {:.3f}s after dispatch",
+                self.name,
+                elapsed,
+            )
+
+    def _inference_response_ended(self) -> None:
+        """Called when LLMFullResponseEndFrame arrives (inference complete)."""
+        now = time.perf_counter()
+        parts = []
+        if self._inference_dispatch_time is not None:
+            parts.append(f"total={now - self._inference_dispatch_time:.3f}s")
+        if self._inference_thinking_time is not None:
+            parts.append(f"since_thinking={now - self._inference_thinking_time:.3f}s")
+        if parts:
+            logger.info(
+                "TaskAgent '{}': inference ended ({})",
+                self.name,
+                ", ".join(parts),
+            )
+        self._inference_dispatch_time = None
+        self._inference_thinking_time = None
+
     # ── Inference scheduling ──────────────────────────────────────────
 
     async def _on_tool_call_completed(self, tool_name: Optional[str], result_payload: Any) -> None:
@@ -939,10 +1023,18 @@ class TaskAgent(LLMAgent):
 
         self._emit_synthetic_progress_message(reasons)
         self._llm_inflight = True
+        self._inference_dispatch_time = time.perf_counter()
+        self._inference_thinking_time = None
+        logger.info(
+            "TaskAgent '{}': dispatching inference, reasons={}",
+            self.name,
+            reasons,
+        )
         try:
             await self.queue_frame(LLMRunFrame())
         except Exception:
             self._llm_inflight = False
+            self._inference_dispatch_time = None
             raise
 
     def _progress_message_for_reasons(self, reasons: List[str]) -> str:
@@ -984,6 +1076,7 @@ class TaskAgent(LLMAgent):
             loop = asyncio.get_running_loop()
         except RuntimeError:
             return
+        self._inference_watchdog_scheduled_at = time.perf_counter()
         self._inference_watchdog_handle = loop.call_later(
             EVENT_BATCH_INFERENCE_DELAY, self._inference_watchdog_fire
         )
@@ -995,6 +1088,14 @@ class TaskAgent(LLMAgent):
 
     def _inference_watchdog_fire(self) -> None:
         self._inference_watchdog_handle = None
+        scheduled_at = getattr(self, "_inference_watchdog_scheduled_at", None)
+        if scheduled_at is not None:
+            delay = time.perf_counter() - scheduled_at
+            logger.debug(
+                "TaskAgent '{}': inference watchdog fired after {:.3f}s batch delay",
+                self.name,
+                delay,
+            )
         asyncio.create_task(self._schedule_pending_inference())
 
     async def _on_completion_event_timeout(self) -> None:

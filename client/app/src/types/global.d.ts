@@ -407,6 +407,7 @@ declare global {
     | "ACTION"
     | "EVENT"
     | "MESSAGE"
+    | "THINKING"
     | "ERROR"
     | "FAILED"
     | "COMPLETE"
