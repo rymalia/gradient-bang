@@ -109,7 +109,7 @@ export const Game = () => {
       >
         <Panel className="flex flex-col">
           <TopBar />
-          <main className=" @container/main relative flex-1 flex flex-col gap-0 gap-y-ui-sm">
+          <main className=" @container/main relative flex-1 flex flex-col gap-0 gap-y-ui-sm overflow-hidden">
             <div className="absolute left-0 top-1/2 -translate-y-1/2 h-60 w-full pointer-events-none z-20">
               <ActivityStream />
             </div>
@@ -147,7 +147,7 @@ export const Game = () => {
             <footer className="p-ui-xs py-0 mb-ui-xs h-ui-bottom grid grid-cols-[1fr_auto_auto]">
               <ConversationPanel className="min-w-0 max-w-2xl mr-ui-xs" />
               <UIModeToggle />
-              <div className="relative w-ui-minimap h-ui-bottom bracket-left bracket-offset-0 bracket-1 bracket-input">
+              <div className="relative w-ui-minimap h-ui-bottom bracket-left bracket-offset-0 bracket-1 bracket-input overflow-hidden">
                 <motion.div
                   className="absolute inset-0 h-full w-ui-minimap"
                   animate={uiMode === "tasks" ? { opacity: 1, y: 0 } : { opacity: 0, y: -100 }}
