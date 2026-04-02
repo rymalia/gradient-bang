@@ -16,7 +16,6 @@ import { useLeaderboardControls } from ".ladle/useLeaderboardControls"
 import { useQuestControls } from ".ladle/useQuestControls"
 
 import { SHIP_DEFINITIONS } from "@/types/ships"
-import { PLAYER_FULL_MOCK } from "@/mocks/player.mock"
 import {
   createRandomCorporation,
   createRandomPlayer,
@@ -86,12 +85,6 @@ export const LevaControls = ({
       state.setPlayer({
         name: faker.person.fullName(),
         id: "81da8782-7bb1-4f68-9456-76697f249b92",
-      })
-    }),
-    ["Mock Player Self (Full)"]: button(() => {
-      useGameStore.getState().setState({
-        player: PLAYER_FULL_MOCK.player,
-        ship: PLAYER_FULL_MOCK.ship,
       })
     }),
 
@@ -246,22 +239,17 @@ export const LevaControls = ({
           const newEmptyHolds = Math.max(0, (ship?.empty_holds ?? currentCargoCapacity) + 10)
           setShip({ ...ship, cargo_capacity: currentCargoCapacity, empty_holds: newEmptyHolds })
         }),
-        ["Credits Amount"]: { value: 1000, step: 100 },
-        ["Credits"]: buttonGroup({
-          opts: {
-            ["Hand"]: (get) => {
-              const amount = get("Player.Credits Amount") as number
-              const ship = useGameStore.getState().ship
-              const setShip = useGameStore.getState().setShip
-              setShip({ ...ship, credits: (ship?.credits ?? 0) + amount })
-            },
-            ["Bank"]: (get) => {
-              const amount = get("Player.Credits Amount") as number
-              const player = useGameStore.getState().player
-              const setPlayer = useGameStore.getState().setPlayer
-              setPlayer({ ...player, credits_in_bank: (player?.credits_in_bank ?? 0) + amount })
-            },
-          },
+        ["Increment Credits"]: button(() => {
+          const ship = useGameStore.getState().ship
+          const setShip = useGameStore.getState().setShip
+          const currentCredits = ship?.credits ?? 0
+          setShip({ ...ship, credits: currentCredits + 1000 })
+        }),
+        ["Decrement Credits"]: button(() => {
+          const ship = useGameStore.getState().ship
+          const setShip = useGameStore.getState().setShip
+          const currentCredits = ship?.credits ?? 0
+          setShip({ ...ship, credits: currentCredits - 1000 })
         }),
         ["Add Random Player"]: button(() => {
           const player = createRandomPlayer()

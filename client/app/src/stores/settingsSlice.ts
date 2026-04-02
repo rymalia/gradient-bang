@@ -23,8 +23,6 @@ export interface SettingsSlice {
     qualityPreset: PerformanceProfile
     saveSettings: boolean
     defaultUIMode: UIMode
-    personality: string
-    voice: string
   }
   setSettings: (settings: SettingsSlice["settings"]) => void
 
@@ -53,8 +51,6 @@ const defaultSettings = {
   qualityPreset: "auto",
   saveSettings: true,
   defaultUIMode: "tasks",
-  personality: "stock_firmware",
-  voice: "ec1e269e-9ca0-402f-8a18-58e0e022355a",
 }
 
 export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({

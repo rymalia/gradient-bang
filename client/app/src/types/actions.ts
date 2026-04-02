@@ -81,11 +81,6 @@ export interface AssignQuestAction {
   payload: { quest_code: string }
 }
 
-export interface ClaimStepRewardAction {
-  type: "claim-step-reward"
-  payload: { quest_id: string; step_id: string }
-}
-
 export interface CombatActionAction {
   type: "combat-action"
   payload: {
@@ -124,7 +119,6 @@ export type GameAction = (
   | SayTextAction
   | SayTextDimissAction
   | AssignQuestAction
-  | ClaimStepRewardAction
   | CombatActionAction
   | DumpLLMContextAction
   | DumpTaskContextAction

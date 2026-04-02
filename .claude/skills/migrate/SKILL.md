@@ -16,18 +16,21 @@ Applies pending Supabase migrations to the local or production database. This sk
 
 ## Parameters
 
-The user specifies the environment as an argument: `/migrate local`, `/migrate dev`, or `/migrate prod`. If not provided, ask which environment.
-
-- `local` → env file: `.env.supabase`
-- `dev` → env file: `.env.cloud.dev`
-- `prod` → env file: `.env.cloud`
+Ask the user for:
+- **Target database**: `local` or `production`
 
 ## Steps
 
 ### 1. Source environment variables
 
+For **local**:
 ```bash
-set -a && source <env-file> && set +a
+set -a && source .env.supabase && set +a
+```
+
+For **production**:
+```bash
+set -a && source .env.cloud && set +a
 ```
 
 ### 2. Check for pending migrations
@@ -39,7 +42,7 @@ For **local**:
 npx supabase migration list --workdir deployment
 ```
 
-For **dev** or **prod** (requires the project to be linked):
+For **production** (requires the project to be linked):
 ```bash
 npx supabase migration list --workdir deployment --linked
 ```

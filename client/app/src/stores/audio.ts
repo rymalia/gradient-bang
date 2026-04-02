@@ -12,7 +12,6 @@ interface PlaySoundOptions {
   volume?: number
   loop?: boolean
   once?: boolean
-  delay?: number // Delay in ms before playback starts
 }
 
 interface FadeOptions {
@@ -151,8 +150,7 @@ function isSoundDisabled(
 function startSound(
   buffer: AudioBuffer,
   volume: number,
-  loop: boolean,
-  delay?: number
+  loop: boolean
 ): { source: AudioBufferSourceNode; gain: GainNode } {
   const ctx = getSharedAudioContext()
   const source = ctx.createBufferSource()
@@ -164,8 +162,7 @@ function startSound(
 
   source.connect(gain)
   gain.connect(ctx.destination)
-  const when = delay ? ctx.currentTime + delay / 1000 : 0
-  source.start(when)
+  source.start(0)
 
   return { source, gain }
 }
@@ -207,7 +204,7 @@ function playSoundWithBuffer(
   const finalVolume = isDisabled ? 0 : baseVolume * typeMultiplier
   const loop = !!(options?.once || options?.loop)
 
-  const { source, gain } = startSound(buffer, finalVolume, loop, options?.delay)
+  const { source, gain } = startSound(buffer, finalVolume, loop)
 
   if (options?.once) {
     activeOnceSounds.set(soundName, {
