@@ -1,6 +1,7 @@
 name: Deploy Bot (Dev)
 
 on:
+  workflow_dispatch:
   push:
     branches: [dev]
     paths:
@@ -27,8 +28,13 @@ jobs:
       - name: Install Pipecat CLI
         run: pip install pipecat-ai-cli==0.3.2 pipecatcloud==0.4.1
 
-      - name: Authenticate with Pipecat Cloud
-        run: pipecat cloud auth login --token "${{ secrets.PCC_PAT }}"
+      - name: Configure Pipecat Cloud credentials
+        run: |
+          mkdir -p ~/.config/pipecatcloud
+          cat > ~/.config/pipecatcloud/pipecatcloud.toml << EOF
+          token = "${{ secrets.PCC_PAT }}"
+          org = "gradientbang"
+          EOF
 
       - name: Generate deploy config
         run: |
